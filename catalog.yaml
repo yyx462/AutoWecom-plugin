@@ -1,0 +1,43 @@
+# plugin/catalog.yaml — the join key (HOW_TO_MIGRATE §1/§5)
+#
+# One row = one product capability, visible to the model. Every row must
+# have BOTH a stub (extensions/) and a broker handler; a row without a
+# handler is a 404 waiting to happen. The broker reads the same file
+# (mounted read-only at CATALOG_PATH) to authorize /invoke names.
+#
+# Repo split: stubs/skills/catalog live HERE (AutoWecom-plugin); the
+# `handler:` paths below are relative to the CORE repo (AutoWecom-core).
+# Land the core handler FIRST, then the catalog row here — /invoke fails
+# closed, so a row without a handler degrades to a 404 on that tool only.
+#
+# Planned rows (sop.get, sop.update, tickets.search, tickets.get,
+# tickets.create, ask_human) are deliberately NOT here yet: they get a
+# row exactly when their broker handler lands (§5 recipe).
+#
+# args use the informal "<name>: <type> (required|optional) — note" shape;
+# the broker parses names only (broker/catalog.py).
+
+tools:
+  - name: kb_search
+    description: >
+      Search the bot's trusted knowledge base (human-approved entries).
+      Returns matched entries with source file, section and score.
+    args:
+      query: string (required) — natural-language search text
+    stub: extensions/index.js (kb_search)
+    handler: broker/handlers/search/ptools.py (search_kb)
+
+  - name: repo_search
+    description: >
+      Full-text search over the internal repositories the bot is allowed
+      to answer from. Returns per-repo file hits with line numbers.
+    args:
+      query: string (required) — natural-language search text
+    stub: extensions/index.js (repo_search)
+    handler: broker/handlers/search/ptools.py (search_repo)
+
+  - name: list_repos
+    description: List the answerable repositories with indexed file counts.
+    args: {}
+    stub: extensions/index.js (list_repos)
+    handler: broker/handlers/search/ptools.py (list_repos)

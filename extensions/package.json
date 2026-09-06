@@ -1,0 +1,8 @@
+{
+  "name": "AutoWecom-plugin-extensions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pi registerTool stubs for the AutoWecom plugin: kb_search / repo_search / list_repos, executed as POST /invoke against the broker",
+  "main": "index.js",
+  "type": "module"
+}
