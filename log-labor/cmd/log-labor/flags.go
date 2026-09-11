@@ -25,7 +25,7 @@ var flagTakesValue = map[string]bool{
 	"content": true, "hours": true, "date": true, "status": true,
 	"person": true, "proposer": true, "blocker": true, "due": true,
 	"link": true, "record-id": true, "key": true, "agent": true, "o": true,
-	"sheet": true, "endpoint": true,
+	"sheet": true, "endpoint": true, "db": true, "total": true,
 }
 var aliases = map[string]string{
 	"c": "content", "h": "hours", "r": "record-id", "y": "yes",

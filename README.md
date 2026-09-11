@@ -48,6 +48,13 @@ log-labor doctor                                          # config + key health 
 log-labor skill upgrade                                   # refresh installed skills after CLI updates
 ```
 
+End-of-day batch from parallel agent sessions (Σ lands on exactly 8h):
+
+```bash
+log-labor daily collect                     # today's sessions: project, span, msgs
+log-labor daily fit "联调"=3.2 "修DAG"=2.7   # scales+snaps to Σ=8.0, prints add lines
+```
+
 Missing `--date` = today (Asia/Shanghai); missing `--status` = 进行中;
 unset optionals are omitted from the row, never written empty. Exit codes:
 `0` ok · `1` WeCom returned an error · `2` usage/config problem.

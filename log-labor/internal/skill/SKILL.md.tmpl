@@ -51,6 +51,25 @@ default today +08) · `--status` ({{STATUSES}}) · `--person` (corp id)
   ms-epoch STRING (00:00 +08) · single_select = option text · user =
   corp id · link = record ids.
 
+## End-of-day batch (sum to 8h)
+
+When the user asks to 总结今天 / 报工总结 / close out the day — or runs
+parallel agent sessions all day and reports at once:
+
+1. `log-labor daily collect [--date YYYY-MM-DD]` — digest of that day's
+   agent sessions: project, time span, message count, title.
+2. Draft 2–6 records grouping the digest into real work themes with
+   HONEST raw hours; ask the user when the digest is ambiguous. Never
+   invent work that is not in the digest (or that the user rejects).
+3. Fit them to one working day — pipe a JSON array to
+   `log-labor daily fit --date <day>`:
+   `echo '[{"content":"…","hours":2.5},…]' | log-labor daily fit --date 2026-09-11`
+   (or bare args: `log-labor daily fit "内容"=2.5 …`). The fit scales
+   proportions, snaps to 0.5h, and lands Σ on EXACTLY 8.0h; it prints
+   the fitted table plus ready `log-labor add` lines (with `--date`).
+4. Show the fitted table to the user; after OK, run each add line.
+   Cite which digest session each record came from.
+
 ## Onboarding a coworker (张三)
 
 ```bash
