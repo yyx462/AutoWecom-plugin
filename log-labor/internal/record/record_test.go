@@ -53,8 +53,8 @@ func TestBuildValues_UserShapes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u, ok := v["f5URWZ"].([]map[string]string); !ok || u[0]["user_id"] != "ying.yuxiang" {
-		t.Fatalf("person shape wrong: %#v", v["f5URWZ"])
+	if u, ok := v["fQLSz5"].([]map[string]string); !ok || u[0]["user_id"] != "ying.yuxiang" {
+		t.Fatalf("person shape wrong: %#v", v["fQLSz5"])
 	}
 	if v["f3Wcc3"] != "1789056000000" {
 		t.Fatalf("date shape wrong: %#v", v["f3Wcc3"])
