@@ -97,3 +97,32 @@ func TestBuildValues_DefaultsOnlyInAddMode(t *testing.T) {
 		t.Fatalf("update mode with no options must stay empty, got %#v", upd)
 	}
 }
+
+func TestPreviewCJKAlignment(t *testing.T) {
+	p := testProfile()
+	p.FieldOrder = []string{"person", "date", "status", "content", "hours", "blocker"}
+	values := map[string]any{
+		"date":    "2026-09-11",
+		"content": "[skill验证] 测试（可删除）",
+		"hours":   "0.5",
+	}
+	out := Preview(p, values)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("want 3 lines (header/rule/cells), got %d:\n%s", len(lines), out)
+	}
+	// header and cells must occupy identical display width per column:
+	// every line's total display width must match.
+	want := dispWidth(lines[0])
+	for i, l := range lines {
+		if got := dispWidth(l); got != want {
+			t.Errorf("line %d width %d != header width %d:\n%s", i, got, want, out)
+		}
+	}
+	if strings.Contains(out, "—") || strings.Contains(out, "|") {
+		t.Errorf("old-style placeholders/pipes leaked:\n%s", out)
+	}
+	if !strings.Contains(lines[2], "·") {
+		t.Errorf("unset cells should render as ·:\n%s", out)
+	}
+}

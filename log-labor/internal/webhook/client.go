@@ -64,12 +64,28 @@ func (r *Response) RecordID() string {
 	return ""
 }
 
+// errHints — plain-language next steps ("next:") for the errcodes this CLI can
+// actually provoke. The key insight for 2022004: the KEY is valid (the
+// empty-add probe passed), but the sheet behind it doesn't have the
+// profile's field ids — almost always a key pasted from ANOTHER sheet.
+var errHints = map[int]string{
+	2022004: "this sheet has no such column — if init said \"key accepted\", you likely pasted a key from a DIFFERENT sheet; the key must come from 任务工时详细 → 更多 → 接收外部数据",
+	2022003: "record_id not found on this sheet — ids are sheet-scoped; check `log-labor config get sheet`",
+	40031:   "bad user value — 人员 needs the corp userid (zhang.san form); woa-… and numeric ids are rejected atomically (nothing written)",
+	40058:   "one operation per request — the CLI never mixes add+update; report this if you see it",
+	840001:  "invalid webhook key — `log-labor config set key <key>` with the key from 接收外部数据",
+}
+
 // Err — non-nil when errcode != 0.
 func (r *Response) Err() error {
 	if r.Errcode == 0 {
 		return nil
 	}
-	return fmt.Errorf("wecom errcode=%d errmsg=%s", r.Errcode, r.Errmsg)
+	msg := fmt.Sprintf("wecom errcode=%d errmsg=%s", r.Errcode, r.Errmsg)
+	if hint, ok := errHints[r.Errcode]; ok {
+		msg += " — next: " + hint
+	}
+	return fmt.Errorf("%s", msg)
 }
 
 // Client — endpoint without key; key appended per call (never logged).

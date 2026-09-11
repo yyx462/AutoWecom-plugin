@@ -259,9 +259,48 @@ func OptionsFromValues(p *config.Profile, values map[string]any) Options {
 
 // Preview — the user-facing table (tab-separated, 中文 dates), matching
 // the sheet's column order. Only the fields present in values are shown.
+// roleNames — profile role → sheet column header (中文).
+var roleNames = map[string]string{
+	"person": "人员", "date": "日期", "status": "状态",
+	"content": "需求内容", "link": "关联", "hours": "预计花费工时",
+	"due": "预计完成时间", "proposer": "提出人", "blocker": "卡点",
+}
+
+// dispWidth — terminal cells a string occupies: CJK/unambiguous-wide
+// runes count 2, everything else 1 (zero-dep East-Asian-width subset,
+// enough for this sheet's columns).
+func dispWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		switch {
+		case r >= 0x1100 && r <= 0x115F, // Hangul Jamo
+			r >= 0x2E80 && r <= 0xA4CF, // CJK radicals … Yi
+			r >= 0xAC00 && r <= 0xD7A3, // Hangul syllables
+			r >= 0xF900 && r <= 0xFAFF, // CJK compat ideographs
+			r >= 0xFE30 && r <= 0xFE4F, // CJK compat forms
+			r >= 0xFF00 && r <= 0xFF60, // full-width forms
+			r >= 0xFFE0 && r <= 0xFFE6, // full-width signs
+			r >= 0x20000 && r <= 0x3FFFD: // CJK ext B+
+			w += 2
+		default:
+			w += 1
+		}
+	}
+	return w
+}
+
+// padCell — right-pad s with spaces to display width w.
+func padCell(s string, w int) string {
+	if d := dispWidth(s); d < w {
+		return s + strings.Repeat(" ", w-d)
+	}
+	return s
+}
+
 func Preview(p *config.Profile, values map[string]any) string {
 	o := OptionsFromValues(p, values)
-	cells := []string{}
+	headers := make([]string, 0, len(p.FieldOrder))
+	cells := make([]string, 0, len(p.FieldOrder))
 	for _, role := range p.FieldOrder {
 		var s string
 		switch role {
@@ -285,18 +324,37 @@ func Preview(p *config.Profile, values map[string]any) string {
 			s = o.Blocker
 		}
 		if s == "" {
-			s = "—"
+			s = "·" // unset — omitted from the write, never written empty
 		}
+		name := roleNames[role]
+		if name == "" {
+			name = role
+		}
+		headers = append(headers, name)
 		cells = append(cells, s)
 	}
+	widths := make([]int, len(headers))
+	for i := range headers {
+		widths[i] = dispWidth(headers[i])
+		if c := dispWidth(cells[i]); c > widths[i] {
+			widths[i] = c
+		}
+	}
 	var b strings.Builder
-	b.WriteString("   | " + strings.Join(p.FieldOrder, " | ") + " |\n")
-	for range p.FieldOrder {
-		b.WriteString("---|")
+	for i, h := range headers {
+		b.WriteString("  " + padCell(h, widths[i]))
+	}
+	b.WriteString("\n  ")
+	for i := range headers {
+		b.WriteString(strings.Repeat("─", widths[i]))
+		if i < len(headers)-1 {
+			b.WriteString("  ")
+		}
 	}
 	b.WriteString("\n")
-	b.WriteString("   | " + strings.Join(cells, " | ") + " |\n")
-	return strings.NewReplacer("person", "人员", "date", "日期", "status", "状态",
-		"content", "需求内容", "link", "关联", "hours", "预计花费工时",
-		"due", "预计完成时间", "proposer", "提出人", "blocker", "卡点").Replace(b.String())
+	for i, c := range cells {
+		b.WriteString("  " + padCell(c, widths[i]))
+	}
+	b.WriteString("\n")
+	return b.String()
 }
