@@ -15,8 +15,8 @@ import (
 
 // sampleContent — the marker convention: webhook cannot delete, so every
 // test row announces itself as 可删除 in the row content.
-func sampleContent(via string) string {
-	return fmt.Sprintf("[skill验证] %s 测试（可删除）", via)
+func sampleContent() string {
+	return "[skill验证] 测试（可删除）"
 }
 
 // resolvePerson — --person > $LOG_LABOR_PERSON > config.
@@ -117,7 +117,7 @@ func sampleValues(c *config.Config) (map[string]any, error) {
 	return record.BuildValues(&c.Profile, record.Options{
 		Person:   c.Person,
 		Status:   status,
-		Content:  sampleContent("doctor/init"),
+		Content:  sampleContent(),
 		Hours:    "0.5",
 		Proposer: c.Person,
 		Blocker:  "无",
@@ -190,13 +190,13 @@ func cmdInit(argv []string) error {
 	}
 	person := f.val("person")
 	if person == "" {
-		person, err = prompt("你的企业userid (corp id, e.g. ying.yuxiang)", c.Person)
+		person, err = prompt("你的企业userid (corp id)", c.Person)
 		if err != nil {
 			return err
 		}
 	}
 	if strings.HasPrefix(person, "woa-") {
-		return exitError{code: 2, msg: fmt.Sprintf("%q is a bot-namespace id — init needs your corp userid (e.g. ying.yuxiang)", person)}
+		return exitError{code: 2, msg: fmt.Sprintf("%q is a bot-namespace id — init needs your corp userid (e.g. zhang.san)", person)}
 	}
 	sheet := f.val("sheet")
 	if sheet == "" {
@@ -365,7 +365,7 @@ func cmdConfig(argv []string) error {
 			c.Key = v
 		case "person":
 			if strings.HasPrefix(v, "woa-") {
-				return exitError{code: 2, msg: "person must be a corp userid (e.g. ying.yuxiang), not a woa- id"}
+				return exitError{code: 2, msg: "person must be a corp userid (e.g. zhang.san), not a woa- id"}
 			}
 			c.Person = v
 		case "sheet":

@@ -18,7 +18,7 @@ curl -fsSL 'https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/raw/branch/mas
 # 2. configure — wizard asks for the sheet webhook key + your corp id
 log-labor init
 #   ? Webhook key: nkVN…********************************…X9z
-#   ? 你的企业userid (corp id, e.g. ying.yuxiang): zhang.san
+#   ? 你的企业userid (corp id): zhang.san
 #   ? Sheet name [任务工时详细]: ⏎
 #   config written to ~/.config/log-labor/config.json (0600)
 
@@ -26,7 +26,7 @@ log-labor init
 log-labor doctor --write-sample
 #   you will insert 1 row into sheet 任务工时详细:
 #   | 人员       | 日期        | 状态   | 需求内容                        | 预计花费工时 | 提出人 | 卡点 |
-#   | zhang.san | 2026年9月11日 | 已完成 | [skill验证] doctor 测试（可删除） | 0.5         | 张三   | 无   |
+#   | zhang.san | 2026年9月11日 | 已完成 | [skill验证] 测试（可删除） | 0.5         | 张三   | 无   |
 #   proceed? [y/N] y
 #   ok add record_id=rXyZ98 — delete this row in the sheet UI when done
 
