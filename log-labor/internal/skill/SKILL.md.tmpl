@@ -54,7 +54,8 @@ default today +08) · `--status` ({{STATUSES}}) · `--person` (corp id)
 ## Onboarding a coworker (张三)
 
 ```bash
-curl -fsSL 'https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/raw/branch/master/log-labor/install.sh' | sh
+git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
+./AutoWecom-plugin/log-labor/install.sh   # builds from the clone
 log-labor init            # key + corp id (zhang.san form) + sheet name
 log-labor doctor --write-sample   # one marked row proves the pipeline
 log-labor skill install   # this skill, for every agent on the machine
