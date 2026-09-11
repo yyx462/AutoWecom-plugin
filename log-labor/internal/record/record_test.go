@@ -1,6 +1,7 @@
 package record
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -124,5 +125,32 @@ func TestPreviewCJKAlignment(t *testing.T) {
 	}
 	if !strings.Contains(lines[2], "·") {
 		t.Errorf("unset cells should render as ·:\n%s", out)
+	}
+}
+
+func TestOptionsFromValuesRoundTrip(t *testing.T) {
+	p := testProfile()
+	p.FieldOrder = []string{"person", "date", "status", "content", "link", "hours", "proposer", "blocker"}
+	in := Options{Person: "zhang.san", Date: "2026-09-11", Status: "已完成",
+		Content: "完成登录页联调", Link: "rAbC12,rXyZ98", Hours: "2.5",
+		Proposer: "lisi", Blocker: "无"}
+	values, err := BuildValues(p, in, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := OptionsFromValues(p, values)
+	// date legitimately becomes ms-epoch; compare rendered form.
+	in.Date, out.Date = CnDate(in.Date), CnDate(out.Date)
+	if out != in {
+		t.Errorf("round-trip lost data:\n in=%+v\nout=%+v", in, out)
+	}
+	// JSON-parsed shape must round-trip identically.
+	j, _ := json.Marshal(values)
+	var parsed map[string]any
+	_ = json.Unmarshal(j, &parsed)
+	out2 := OptionsFromValues(p, parsed)
+	out2.Date = CnDate(out2.Date)
+	if out2 != in {
+		t.Errorf("json-shape round-trip lost data:\n in=%+v\nout=%+v", in, out2)
 	}
 }
