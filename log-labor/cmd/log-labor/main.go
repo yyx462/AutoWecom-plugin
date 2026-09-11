@@ -36,7 +36,8 @@ func usage() {
   log-labor update --record-id R [same field flags]
   log-labor doctor [--write-sample]               config + key health, no writes
   log-labor config get|set|list|path [key] [value]
-  log-labor skill install|upgrade|uninstall|render [--agent NAME|--all] [--project]
+  log-labor daily collect                        digest today's agent sessions (opencode)
+  log-labor daily fit "内容"=2.5 …|--total N      fit drafts to sum exactly N (default 8)
   log-labor version
 
 Exit codes: 0 ok · 1 WeCom error · 2 usage/config.
@@ -58,6 +59,8 @@ func dispatch(args []string) error {
 		return cmdConfig(args[1:])
 	case "skill":
 		return cmdSkill(args[1:])
+	case "daily":
+		return cmdDaily(args[1:])
 	case "version", "--version", "-v":
 		fmt.Println("log-labor " + version)
 		return nil
