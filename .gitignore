@@ -3,3 +3,4 @@ dist/
 *.tar.gz
 log-labor/log-labor
 log-labor/dist/
+.yyx-meta.json

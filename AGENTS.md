@@ -34,6 +34,18 @@ plugin of the new generation.
       skill/              SKILL.md.tmpl (embedded source) + rendered SKILL.md
       install.sh          standalone installer (Gitea raw/release)
 
+## Landing changes (gwt)
+
+This repo is gwt-managed — NEVER hand-branch inside master/. Flow:
+`gwt spawn <name>` (name becomes the dir AND branch), work under that
+path, `gwt submit-pr "<title>" "<body>"` (opens the Gitea PR via
+$GITEA_TOKEN), merge, `gwt remove <name>` / `gwt reap-all`.
+Push fails with keychain `-25308` → `gwt doctor`. A commit stranded on
+a branch whose PR already merged → `gwt audit` (STRANDED) → `gwt recover
+<branch>` opens a NEW PR from the same branch — do NOT cherry-pick by
+hand. Session-start dashboard: `gwt context` (auto after
+`gwt session install --app opencode`).
+
 ## Adding a plugin
 
 1. New sibling dir with `plugin.json` (`"api": 1`) and an entry script
