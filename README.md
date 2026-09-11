@@ -11,9 +11,12 @@ and how to call the CLI.
 ## Install (张三's walkthrough)
 
 ```bash
-# 1. binary (macOS arm64 example; install.sh detects os/arch)
-curl -fsSL 'https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/raw/branch/master/log-labor/install.sh' | sh
-#   → installs to ~/.local/bin/log-labor (asks sudo only if needed)
+# 1. clone with your corp Gitea login, then run the installer
+git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
+./AutoWecom-plugin/log-labor/install.sh
+#   → builds from the checkout, installs to ~/.local/bin/log-labor
+#   (git.sh.nint.com signs everyone in, so a piped curl gets the login
+#   page — clone first, then run)
 
 # 2. configure — wizard asks for the sheet webhook key + your corp id
 log-labor init

@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# install.sh — standalone installer for the log-labor CLI.
+# install.sh — installer for the log-labor CLI.
 #
-#   curl -fsSL 'https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/raw/branch/master/log-labor/install.sh' | sh
+#   git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
+#   ./AutoWecom-plugin/log-labor/install.sh
 #
-# Prefers a Gitea release tarball (log-labor-vTAG tag); falls back to a
-# source build when `go` is available and a checkout exists. Never touches
-# credentials — `log-labor init` does that.
+# (The instance signs everyone in — REQUIRE_SIGNIN_VIEW — so anonymous
+# `curl … | sh` against raw URLs gets a login page, not a script. If
+# your Gitea ever allows anonymous raw, the piped one-liner works too.)
+#
+# Order: build from the checkout this script lives in (no network),
+# else a Gitea release tarball (log-labor-vTAG), else a fresh shallow
+# clone + source build. Never touches credentials — `log-labor init`
+# does that.
 set -euo pipefail
 
 BASE_URL="${LOG_LABOR_BASE_URL:-https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin}"
@@ -23,10 +29,20 @@ URL="$BASE_URL/releases/download/$TAG/$TGZ"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "install.sh: trying release $TAG ($OS/$ARCH)…"
+echo "install.sh: looking for a source to build…"
 SRC=""
-if curl -fsSL -m 60 -o "$TMP/$TGZ" "$URL" && [ "$(head -c2 "$TMP/$TGZ" | xxd -p)" = "1f8b" ]; then
-  tar -xzf "$TMP/$TGZ" -C "$TMP" && SRC="$TMP/log-labor"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$HERE/go.mod" ]; then
+  echo "install.sh: building from the local checkout at $HERE"
+  command -v go >/dev/null || { echo "install.sh: FATAL — go not found; install go or use a release tarball" >&2; exit 1; }
+  ( cd "$HERE" && go build -o "$TMP/log-labor" ./cmd/log-labor )
+  SRC="$TMP/log-labor"
+fi
+if [ -z "$SRC" ]; then
+  echo "install.sh: no local checkout — trying release $TAG ($OS/$ARCH)…"
+  if curl -fsSL -m 60 -o "$TMP/$TGZ" "$URL" && [ "$(head -c2 "$TMP/$TGZ" | xxd -p)" = "1f8b" ]; then
+    tar -xzf "$TMP/$TGZ" -C "$TMP" && SRC="$TMP/log-labor"
+  fi
 fi
 if [ -z "$SRC" ]; then
   echo "install.sh: no usable release tarball — trying a source build from ${REF}…"
