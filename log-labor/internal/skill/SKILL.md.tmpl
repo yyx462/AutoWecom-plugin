@@ -70,6 +70,36 @@ parallel agent sessions all day and reports at once:
 4. Show the fitted table to the user; after OK, run each add line.
    Cite which digest session each record came from.
 
+## Session sources — setup for any agent
+
+`daily collect` auto-detects the verified built-ins: opencode
+(~/.local/share/opencode/opencode.db) and Claude Code
+(~/.claude/projects). Any OTHER harness with durable line-JSON session
+logs needs a one-time registration — the agent does this itself:
+
+1. Probe: does this harness write session files anywhere under
+   `~/.<agent>/`? Look for sqlite stores or `*.jsonl` with per-line
+   timestamps (and ideally a session id + project/cwd).
+2. Claude-shaped JSONL (timestamp/cwd/sessionId per line):
+   `log-labor daily sources add --name <harness> --format jsonl-claude \
+      --path <dir>`
+   Any other line-JSON shape — declare the field names:
+   `log-labor daily sources add --name <harness> --format jsonl-generic \
+      --path <dir> --timestamp-field ts --cwd-field project \
+      --session-field sid --title-field what`
+   (opencode is built-in; no registration needed. The sqlite family is
+   opencode-only — other sqlite stores are NOT supported yet.)
+3. Verify BEFORE trusting it:
+   `log-labor daily sources test --name <harness> [--date YYYY-MM-DD]`
+   → session count + sample rows. Then `daily collect` — every digest
+   line is tagged with the source name.
+4. Harnesses with NO durable transcripts (Cursor, Trae): those sessions
+   can't be collected — ask the user what they did there and merge it
+   into the same fit.
+
+Never invent a source's contents; if `test` returns 0 sessions for a
+day the user says they worked, say so and ask.
+
 ## Onboarding a coworker (张三)
 
 ```bash

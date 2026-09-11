@@ -5,106 +5,254 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config"
 	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/record"
+	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/sources"
 )
 
-// cmdDaily — `daily collect` + `daily fit`: the end-of-day ritual.
-// Collect digests today's agent sessions; fit drafts them into records
-// summing to exactly one working day (default 8h).
-// cnZone — Asia/Shanghai as a fixed +8 zone (sheet's timezone).
-func cnZone() *time.Location { return time.FixedZone("CST", 8*3600) }
-
+// cmdDaily — `daily collect|sources|fit`: the end-of-day ritual.
+// Collect digests the day's agent sessions across every registered or
+// built-in store; fit drafts them into records summing to exactly one
+// working day (default 8h).
 func cmdDaily(args []string) error {
 	if len(args) == 0 {
-		return exitError{code: 2, msg: "daily needs a verb: collect|fit"}
+		return exitError{code: 2, msg: "daily needs a verb: collect|sources|fit"}
 	}
 	switch args[0] {
 	case "collect":
 		return dailyCollect(args[1:])
+	case "sources":
+		return dailySources(args[1:])
 	case "fit":
 		return dailyFit(args[1:])
 	default:
-		return exitError{code: 2, msg: fmt.Sprintf("unknown daily verb %q — want collect|fit", args[0])}
+		return exitError{code: 2, msg: fmt.Sprintf("unknown daily verb %q — want collect|sources|fit", args[0])}
 	}
 }
 
-// dailyCollect — digest today's opencode sessions from the local
-// sqlite store (read-only, via the sqlite3 CLI; zero Go deps).
+// cnZone — Asia/Shanghai as a fixed +8 zone (sheet's timezone).
+func cnZone() *time.Location { return time.FixedZone("CST", 8*3600) }
+
+// resolveDay — --date (default today, +08) → start-of-day ms epoch.
+func resolveDay(day string) (int64, string, error) {
+	if day == "" {
+		day = time.Now().In(cnZone()).Format("2006-01-02")
+	}
+	t0, err := time.ParseInLocation("2006-01-02", day, cnZone())
+	if err != nil {
+		return 0, "", fmt.Errorf("bad --date %q: %w", day, err)
+	}
+	return t0.UnixMilli(), day, nil
+}
+
+// dailySourcesFor — registered sources + built-ins not shadowed by a
+// registration with the same path.
+func dailySourcesFor(c *config.Config) []sources.Source {
+	out := sources.BuiltIns()
+	var keep []sources.Source
+	for _, b := range out {
+		shadowed := false
+		for _, r := range c.Sources {
+			if r.Path == b.Path {
+				shadowed = true
+				break
+			}
+		}
+		if !shadowed {
+			keep = append(keep, b)
+		}
+	}
+	return append(keep, c.Sources...)
+}
+
 func dailyCollect(args []string) error {
 	f, err := parseFlags(args)
 	if err != nil {
 		return err
 	}
-	loc := cnZone()
-	day := f.val("date")
-	if day == "" {
-		day = time.Now().In(loc).Format("2006-01-02")
-	}
-	t0, err := time.ParseInLocation("2006-01-02", day, loc)
+	fromMs, day, err := resolveDay(f.val("date"))
 	if err != nil {
-		return exitError{code: 2, msg: fmt.Sprintf("bad --date %q: %v", day, err)}
+		return exitError{code: 2, msg: err.Error()}
 	}
-	fromMs := t0.UnixMilli()
-
-	db := f.val("db")
-	if db == "" {
-		home, _ := os.UserHomeDir()
-		db = filepath.Join(home, ".local", "share", "opencode", "opencode.db")
-	}
-	if _, err := os.Stat(db); err != nil {
-		return exitError{code: 2, msg: fmt.Sprintf("no opencode store at %s (is opencode installed?)", db)}
-	}
-	q := fmt.Sprintf(`SELECT m.session_id AS id, MIN(m.time_created) AS t0,
-		MAX(m.time_created) AS t1, COUNT(*) AS msgs,
-		s.directory AS dir, s.title AS title
-		FROM message m JOIN session s ON s.id = m.session_id
-		WHERE m.time_created >= %d GROUP BY m.session_id ORDER BY t0;`, fromMs)
-	out, err := exec.Command("sqlite3", "-json", "-readonly", db, q).Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
-			return exitError{code: 2, msg: fmt.Sprintf("sqlite3: %s", ee.Stderr)}
+	var all []sources.Source
+	if db := f.val("db"); db != "" { // legacy override: opencode only
+		all = append(all, sources.Source{Name: "opencode", Format: "opencode-sqlite", Path: db})
+	} else {
+		c, err := config.Load()
+		if err == nil {
+			all = dailySourcesFor(c)
+		} else {
+			all = sources.BuiltIns()
 		}
-		return exitError{code: 2, msg: fmt.Sprintf("sqlite3 unavailable or failed: %v", err)}
 	}
-	var rows []struct {
-		ID    string `json:"id"`
-		T0    int64  `json:"t0"`
-		T1    int64  `json:"t1"`
-		Msgs  int    `json:"msgs"`
-		Dir   string `json:"dir"`
-		Title string `json:"title"`
+	if len(all) == 0 {
+		return exitError{code: 2, msg: "no session stores found — register one: `log-labor daily sources add`"}
 	}
-	if err := json.Unmarshal(out, &rows); err != nil {
-		return exitError{code: 2, msg: fmt.Sprintf("parse sqlite output: %v", err)}
+	ss, warns := sources.CollectAll(all, fromMs)
+	for _, w := range warns {
+		fmt.Println("  " + w)
 	}
-	if len(rows) == 0 {
+	if len(ss) == 0 {
 		fmt.Printf("no sessions on %s (+08) — nothing to summarize.\n", day)
 		return nil
 	}
 	fmt.Printf("== sessions on %s (Asia/Shanghai) ==\n", day)
 	projects := map[string]bool{}
-	for _, r := range rows {
-		start := time.UnixMilli(r.T0).In(loc).Format("15:04")
-		end := time.UnixMilli(r.T1).In(loc).Format("15:04")
-		dur := (r.T1 - r.T0) / 60_000 // ms → minutes
+	for _, r := range ss {
+		start := time.UnixMilli(r.Start).In(cnZone()).Format("15:04")
+		end := time.UnixMilli(r.End).In(cnZone()).Format("15:04")
+		dur := (r.End - r.Start) / 60_000 // ms → minutes
 		projects[r.Dir] = true
-		fmt.Printf("  %s–%s  %4dm  %3d msgs  %s  %s\n",
-			start, end, dur, r.Msgs, r.Dir, r.Title)
+		title := r.Title
+		if title == "" {
+			title = "(untitled)"
+		}
+		fmt.Printf("  [%s] %s–%s  %4dm  %3d msgs  %s  %s\n",
+			r.Source, start, end, dur, r.Msgs, r.Dir, title)
 	}
 	names := make([]string, 0, len(projects))
 	for p := range projects {
 		names = append(names, filepath.Base(p))
 	}
 	sort.Strings(names)
-	fmt.Printf("%d sessions · projects: %s\n", len(rows), strings.Join(names, ", "))
+	fmt.Printf("%d sessions · %d sources · projects: %s\n", len(ss), len(all), strings.Join(names, ", "))
 	fmt.Println("draft records from these (group by task, honest hours), then pipe them to `log-labor daily fit`.")
 	return nil
+}
+
+// dailySources — list|add|remove|test: the agent-driven registry that
+// teaches log-labor about this machine's session stores.
+func dailySources(args []string) error {
+	if len(args) == 0 {
+		return exitError{code: 2, msg: "sources needs a verb: list|add|remove|test"}
+	}
+	c, err := config.MustLoad()
+	if err != nil {
+		return err
+	}
+	verb, rest := args[0], args[1:]
+	switch verb {
+	case "list":
+		for _, b := range dailySourcesFor(c) {
+			fmt.Printf("  %-12s %-15s %s\n", b.Name, b.Format, b.Path)
+		}
+		if len(c.Sources) == 0 {
+			fmt.Println("(registered: none — built-ins above; add with `daily sources add`)")
+		}
+		return nil
+	case "add":
+		f, err := parseFlags(rest)
+		if err != nil {
+			return err
+		}
+		s := sources.Source{
+			Name:           f.val("name"),
+			Format:         f.val("format"),
+			Path:           f.val("path"),
+			TimestampField: f.val("timestamp-field"),
+			CwdField:       f.val("cwd-field"),
+			SessionField:   f.val("session-field"),
+			TitleField:     f.val("title-field"),
+		}
+		if s.Name == "" || s.Format == "" || s.Path == "" {
+			return exitError{code: 2, msg: "add needs --name, --format, --path"}
+		}
+		ok := false
+		for _, k := range sources.KnownFormats {
+			if s.Format == k {
+				ok = true
+			}
+		}
+		if !ok {
+			return exitError{code: 2, msg: fmt.Sprintf("unknown format %q — want %s", s.Format, strings.Join(sources.KnownFormats, "|"))}
+		}
+		if p, err := expandHome(s.Path); err == nil {
+			s.Path = p
+		}
+		if _, err := os.Stat(s.Path); err != nil {
+			return exitError{code: 2, msg: fmt.Sprintf("no store at %s", s.Path)}
+		}
+		replaced := false
+		for i, old := range c.Sources {
+			if old.Name == s.Name {
+				c.Sources[i] = s
+				replaced = true
+			}
+		}
+		if !replaced {
+			c.Sources = append(c.Sources, s)
+		}
+		if err := c.Save(); err != nil {
+			return err
+		}
+		fmt.Printf("saved (%s: %s @ %s).\n", s.Name, s.Format, s.Path)
+		return nil
+	case "remove":
+		f, err := parseFlags(rest)
+		if err != nil {
+			return err
+		}
+		name := f.val("name")
+		kept := c.Sources[:0]
+		for _, s := range c.Sources {
+			if s.Name != name {
+				kept = append(kept, s)
+			}
+		}
+		if len(kept) == len(c.Sources) {
+			return exitError{code: 2, msg: fmt.Sprintf("no registered source named %q", name)}
+		}
+		c.Sources = kept
+		return c.Save()
+	case "test":
+		f, err := parseFlags(rest)
+		if err != nil {
+			return err
+		}
+		name := f.val("name")
+		var target *sources.Source
+		for i := range dailySourcesFor(c) {
+			if dailySourcesFor(c)[i].Name == name {
+				target = &dailySourcesFor(c)[i]
+			}
+		}
+		if target == nil {
+			return exitError{code: 2, msg: fmt.Sprintf("no source named %q — see `daily sources list`", name)}
+		}
+		fromMs, day, err := resolveDay(f.val("date"))
+		if err != nil {
+			return exitError{code: 2, msg: err.Error()}
+		}
+		ss, warns := sources.CollectAll([]sources.Source{*target}, fromMs)
+		for _, w := range warns {
+			fmt.Println("  " + w)
+		}
+		fmt.Printf("[%s] %s: %d sessions on %s\n", target.Name, target.Format, len(ss), day)
+		for _, r := range ss {
+			fmt.Printf("  %s–%s  %3d msgs  %s  %s\n",
+				time.UnixMilli(r.Start).In(cnZone()).Format("15:04"),
+				time.UnixMilli(r.End).In(cnZone()).Format("15:04"), r.Msgs, r.Dir, r.Title)
+		}
+		return nil
+	default:
+		return exitError{code: 2, msg: fmt.Sprintf("unknown sources verb %q — want list|add|remove|test", verb)}
+	}
+}
+
+func expandHome(p string) (string, error) {
+	if strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, p[2:]), nil
+	}
+	return p, nil
 }
 
 // dailyFit — input: drafted records as `daily fit "内容"=2.5 "内容"=1`

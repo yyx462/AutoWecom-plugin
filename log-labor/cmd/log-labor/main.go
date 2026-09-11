@@ -36,7 +36,8 @@ func usage() {
   log-labor update --record-id R [same field flags]
   log-labor doctor [--write-sample]               config + key health, no writes
   log-labor config get|set|list|path [key] [value]
-  log-labor daily collect                        digest today's agent sessions (opencode)
+  log-labor daily collect                        digest today's agent sessions (all sources)
+  log-labor daily sources list|add|remove|test    registry of session stores for collect
   log-labor daily fit "内容"=2.5 …|--total N      fit drafts to sum exactly N (default 8)
   log-labor version
 

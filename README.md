@@ -55,6 +55,11 @@ log-labor daily collect                     # today's sessions: project, span, m
 log-labor daily fit "联调"=3.2 "修DAG"=2.7   # scales+snaps to Σ=8.0, prints add lines
 ```
 
+Collect scans every source it knows: built-ins (opencode, Claude Code)
+auto-detect, and any other agent harness registers itself via
+`log-labor daily sources add` — see the skill's "Session sources"
+section.
+
 Missing `--date` = today (Asia/Shanghai); missing `--status` = 进行中;
 unset optionals are omitted from the row, never written empty. Exit codes:
 `0` ok · `1` WeCom returned an error · `2` usage/config problem.
