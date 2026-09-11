@@ -68,7 +68,7 @@ func DefaultProfile() Profile {
 		SheetName: "任务工时详细",
 		Statuses:  []string{"状态", "已完成", "调休", "进行中", "待排期", "已合并", "已关闭"},
 		Fields: map[string]Field{
-			"person":   f("f5URWZ", "人员", "user"),
+			"person":   f("fQLSz5", "人员", "user"),
 			"date":     f("f3Wcc3", "日期", "date_time"),
 			"status":   f("fFtUk3", "文本", "single_select"),
 			"content":  f("fuVenY", "需求内容", "text"),
@@ -78,7 +78,7 @@ func DefaultProfile() Profile {
 			"proposer": f("fEyXeR", "提出人", "text"),
 			"blocker":  f("f1QYcV", "卡点", "text"),
 		},
-		FieldOrder: []string{"date", "person", "status", "content", "link", "hours", "due", "proposer", "blocker"},
+		FieldOrder: []string{"date", "status", "person", "content", "link", "hours", "due", "proposer", "blocker"},
 	}
 }
 

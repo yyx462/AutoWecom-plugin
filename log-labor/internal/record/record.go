@@ -359,9 +359,11 @@ func Preview(p *config.Profile, values map[string]any) string {
 		if s == "" {
 			s = "·" // unset — omitted from the write, never written empty
 		}
-		name := roleNames[role]
-		if name == "" {
-			name = role
+		name := role
+		if f, ok := p.Fields[role]; ok && f.Title != "" {
+			name = f.Title // mirror the sheet's current column header
+		} else if rn := roleNames[role]; rn != "" {
+			name = rn
 		}
 		headers = append(headers, name)
 		cells = append(cells, s)
