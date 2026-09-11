@@ -1,0 +1,99 @@
+package record
+
+import (
+	"strings"
+	"testing"
+
+	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config"
+)
+
+func testProfile() *config.Profile {
+	p := config.DefaultProfile()
+	return &p
+}
+
+// 1789056000000 = 2026-09-11 00:00 +08 — the value the live webhook
+// accepted during the 2026-09-11 probing sessions.
+func TestDateToMs(t *testing.T) {
+	got, err := DateToMs("2026-09-11")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "1789056000000" {
+		t.Fatalf("DateToMs(2026-09-11) = %s, want 1789056000000", got)
+	}
+	if passthrough, _ := DateToMs("1789056000000"); passthrough != "1789056000000" {
+		t.Fatalf("bare ms must pass through, got %s", passthrough)
+	}
+	if _, err := DateToMs("2026/09/11"); err == nil {
+		t.Fatal("bad format must error")
+	}
+}
+
+func TestNormalizeHours(t *testing.T) {
+	cases := map[string]string{"3": "3", "2.5": "2.5", "1h": "1", "2小时": "2", " 1.5H ": "1.5"}
+	for in, want := range cases {
+		got, err := NormalizeHours(in)
+		if err != nil || got != want {
+			t.Fatalf("NormalizeHours(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	if _, err := NormalizeHours("abc"); err == nil {
+		t.Fatal("non-number hours must error")
+	}
+}
+
+func TestBuildValues_UserShapes(t *testing.T) {
+	p := testProfile()
+	// corp id → user field with user_id
+	v, err := BuildValues(p, Options{Person: "ying.yuxiang", Date: "2026-09-11",
+		Status: "已完成", Content: "x", Hours: "1h", Due: "2026-09-12",
+		Proposer: "opencode", Blocker: "无"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, ok := v["f5URWZ"].([]map[string]string); !ok || u[0]["user_id"] != "ying.yuxiang" {
+		t.Fatalf("person shape wrong: %#v", v["f5URWZ"])
+	}
+	if v["f3Wcc3"] != "1789056000000" {
+		t.Fatalf("date shape wrong: %#v", v["f3Wcc3"])
+	}
+	if s, ok := v["fFtUk3"].([]map[string]string); !ok || s[0]["text"] != "已完成" {
+		t.Fatalf("status shape wrong: %#v", v["fFtUk3"])
+	}
+	if n, ok := v["fjKRQJ"].(float64); !ok || n != 1 {
+		t.Fatalf("hours must be a bare number, got %#v", v["fjKRQJ"])
+	}
+	if v["fEF4fy"] != "1789142400000" { // 2026-09-12 00:00 +08
+		t.Fatalf("due shape wrong: %#v", v["fEF4fy"])
+	}
+}
+
+func TestBuildValues_RejectsWoaPerson(t *testing.T) {
+	// atomic-rejection guard: the CLI must refuse before any HTTP happens
+	_, err := BuildValues(testProfile(), Options{Person: "woa-s1CwAAW7x"}, false)
+	if err == nil || !strings.Contains(err.Error(), "40031") {
+		t.Fatalf("woa- person must be refused client-side, got %v", err)
+	}
+}
+
+func TestBuildValues_StatusEnum(t *testing.T) {
+	if _, err := BuildValues(testProfile(), Options{Status: "废话"}, false); err == nil {
+		t.Fatal("off-enum status must error")
+	}
+}
+
+func TestBuildValues_DefaultsOnlyInAddMode(t *testing.T) {
+	p := testProfile()
+	add, _ := BuildValues(p, Options{}, true)
+	if _, ok := add["f3Wcc3"]; !ok {
+		t.Fatal("add mode must default 日期")
+	}
+	if _, ok := add["fFtUk3"]; !ok {
+		t.Fatal("add mode must default 状态")
+	}
+	upd, _ := BuildValues(p, Options{}, false)
+	if len(upd) != 0 {
+		t.Fatalf("update mode with no options must stay empty, got %#v", upd)
+	}
+}

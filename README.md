@@ -1,21 +1,79 @@
-# plugin — the model-facing tree (ships on the plugin tag)
+# log-labor — 报工 CLI + agent skill (WeCom 智能表格 webhook)
 
-Mounted read-only into the brain at `/app/plugin`. Contains everything
-the model or the Pi runtime needs **without performing real I/O**:
+One command to log labor into the team's 任务工时详细 smartsheet — by hand
+or by your AI agent. The CLI talks to the sheet's WeDoc webhook
+(「接收外部数据」) directly; your agent gets a skill that teaches it when
+and how to call the CLI.
 
+    张三$ log-labor add -c "完成登录页联调" -h 3 --status 进行中
+    ok  add record_id=rAbC12  sheet=任务工时详细
+
+## Install (张三's walkthrough)
+
+```bash
+# 1. binary (macOS arm64 example; install.sh detects os/arch)
+curl -fsSL 'https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/raw/branch/master/log-labor/install.sh' | sh
+#   → installs to ~/.local/bin/log-labor (asks sudo only if needed)
+
+# 2. configure — wizard asks for the sheet webhook key + your corp id
+log-labor init
+#   ? Webhook key: nkVN…********************************…X9z
+#   ? 你的企业userid (corp id, e.g. ying.yuxiang): zhang.san
+#   ? Sheet name [任务工时详细]: ⏎
+#   config written to ~/.config/log-labor/config.json (0600)
+
+# 3. prove the pipeline with one clearly-marked sample row (asks first)
+log-labor doctor --write-sample
+#   you will insert 1 row into sheet 任务工时详细:
+#   | 人员       | 日期        | 状态   | 需求内容                        | 预计花费工时 | 提出人 | 卡点 |
+#   | zhang.san | 2026年9月11日 | 已完成 | [skill验证] doctor 测试（可删除） | 0.5         | 张三   | 无   |
+#   proceed? [y/N] y
+#   ok add record_id=rXyZ98 — delete this row in the sheet UI when done
+
+# 4. give your agent the skill (detects Claude Code / opencode / Codex /
+#    Cursor / Trae / AGENTS.md; --all forces everything)
+log-labor skill install
 ```
-catalog.yaml      the join key: one row per product capability
-                  (name + args + description); the broker reads the same
-                  file to authorize /invoke names
-extensions/       Pi registerTool stubs — POST /invoke only, no keys
-skills/           model-facing how-to
-  agent/agent.md  the live investigation prompt (hot-read per turn)
-  sop/            SOP schedule workflows (via the manager API)
-  reporting/      end-of-session labor reporting
-  vendor/         vendored wecom-cli agent skills (upstream, MIT)
-opencode.json     registers skills/ for agents working on the plugin
+
+## Daily use
+
+```bash
+log-labor add -c "完成登录页联调" -h 3                    # today, 进行中
+log-labor add -c "修复导出崩溃" -h 2 --status 已完成 --blocker "无" --due 2026-09-20
+log-labor update --record-id rAbC12 --status 已完成       # closure = update, not a new row
+log-labor doctor                                          # config + key health (no writes)
+log-labor skill upgrade                                   # refresh installed skills after CLI updates
 ```
 
-Rules (HOW_TO_MIGRATE §1/§7): nothing in this tree may hold a key, call
-a backend, or name a credential. If a file talks to a ticket/doc/LLM/
-WeCom API, it belongs in the broker instead.
+Missing `--date` = today (Asia/Shanghai); missing `--status` = 进行中;
+unset optionals are omitted from the row, never written empty. Exit codes:
+`0` ok · `1` WeCom returned an error · `2` usage/config problem.
+
+## Get the webhook key
+
+The sheet owner enables 接收外部数据 on the sheet (智能表格 → 更多 →
+接收外部数据) and shares the key with you. The key is a write credential
+for that one sheet — treat it like a token; the owner can rotate it in the
+console and you update with `log-labor config set key <new>`.
+
+## Configuration
+
+`~/.config/log-labor/config.json` (0600): `key`, `person` (corp id, e.g.
+`zhang.san`), `endpoint`, and the sheet `profile` (name + field-id map +
+status enum). The default profile targets the team labor sheet; point the
+CLI at a different sheet by editing the profile or `log-labor config set
+sheet <name>` after swapping the field ids.
+
+## For agents
+
+Install the skill (step 4 above) — it teaches your agent the whole
+protocol: value shapes, one-op-per-request, atomic 40031 on bad user ids,
+rate caps, and exactly how to draft 需求内容 and call `log-labor`. The
+rendered skill lives at `log-labor/skill/SKILL.md`; the embedded template
+is the source of truth.
+
+## Building from source
+
+```bash
+cd log-labor && go build -o dist/log-labor ./cmd/log-labor
+```

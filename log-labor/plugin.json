@@ -1,0 +1,13 @@
+{
+  "name": "log-labor",
+  "api": 1,
+  "version": "0.1.0",
+  "description": "报工 CLI + agent skill for the labor smartsheet via its WeDoc webhook",
+  "entry": "core/configure.sh",
+  "env": ["LABOR_WEBHOOK_KEY"],
+  "optional_env": ["LABOR_PERSON_DEFAULT", "LABOR_BROKER_URL"],
+  "artifacts": {
+    "skill": "skill"
+  },
+  "health": "core/configure.sh health"
+}

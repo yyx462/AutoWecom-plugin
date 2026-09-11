@@ -1,28 +1,45 @@
 # AutoWecom-plugin
 
-The model-facing tree for AutoWecom (repo split 2026-09): `catalog.yaml`,
-`extensions/` (Pi registerTool stubs), `skills/` (model how-to + agent
-prompt), `opencode.json`. The core (brain + broker + docs) lives in
-`AutoWecom-core`; the live data repo stays `ying.yuxiang/weComBot-dat`.
+Extension repo for the AutoWecom stack. Core (AutoWecom-core: broker +
+manager + brain) owns I/O and secrets; this repo owns what models and
+humans consume: **skills, CLIs, manifests, docs**. Rebuilt 2026-09-11 —
+the pre-reset catalog/stub generation is gone; log-labor is the first
+plugin of the new generation.
 
-## Rules (HOW_TO_MIGRATE §1/§7)
+## Rules
 
-- Nothing in this tree may hold a key, call a backend, or name a
-  credential. If a file performs real I/O, it belongs in the broker
-  (AutoWecom-core `broker/handlers/`), not here.
-- The catalog is the join key: one row = one stub here + one handler in
-  AutoWecom-core. **Land the core handler first, then the catalog row.**
-  `/invoke` fails closed — a row without a handler is a clean 404 on that
-  tool, never a crash.
-- `send_*`, raw `doc.read`/`doc.edit`, admin bash/write/edit: never rows.
+- **No keys, no secrets in this tree. Ever.** A plugin may SHIP code that
+  performs I/O (e.g. the log-labor CLI writes webhooks as the USER's
+  credential) — but the mounted tree must never carry a credential, and
+  the copy consumed by the brain must never need one (brain stays keyless,
+  core ADR-0004).
+- **Core handler first, then the catalog row.** One `catalog.yaml` row =
+  one capability the broker will actually serve; rows without handlers
+  404 by design. `send_*` and admin surfaces are never rows.
+- **Mount contract:** this repo is mounted read-only into the stack
+  (`PLUGIN_DIR`, brain sees `/app/plugin`). Same clone serves dev
+  (`PLUGIN_DIR=../AutoWecom-plugin/master` from the core worktree) and
+  server (auto-deployed checkout).
+- **Pin contract:** tags `plugin-x.y.z`; core's deploy pins `PLUGIN_REF`
+  (default `origin/master` / the auto-deployed checkout). Stamped,
+  idempotent installs — see `log-labor/core/configure.sh`.
 
-## Deploy
+## Layout
 
-Mounted read-only at `/app/plugin` into BOTH broker (catalog
-authorization) and brain (stubs + skills). Same clone serves both mounts
-(docker-compose `PLUGIN_DIR`). Pin scheme: tag `plugin-x.y.z` here;
-`deploy.sh` checks out `PLUGIN_REF` (default `origin/master`).
+    catalog.yaml          model-tool registry (rows ONLY with live core handlers)
+    log-labor/            first plugin: 报工 CLI + agent skill
+      plugin.json         manifest (api, name, entry, env contract)
+      core/configure.sh   entry: env|plan|install|health (driven by core deploy.sh)
+      cmd/, internal/     Go CLI source (module root = log-labor/)
+      skill/              SKILL.md.tmpl (embedded source) + rendered SKILL.md
+      install.sh          standalone installer (Gitea raw/release)
 
-Dev layout (gwt): this repo at `../AutoWecom-plugin/master`, core at
-`../AutoWecom/master` — run compose from the core worktree with
-`PLUGIN_DIR=../AutoWecom-plugin/master`.
+## Adding a plugin
+
+1. New sibling dir with `plugin.json` (`"api": 1`) and an entry script
+   speaking the verb protocol: `env` (required env names, one per line),
+   `plan`, `install`, `health` — all idempotent, all loud on failure.
+2. Anything the brain should know goes in `skills/…` (SKILL.md) or a
+   catalog row AFTER its core handler lands.
+3. Register nothing by hand in core: core's deploy walks `PLUGIN_DIR/*/`
+   generically.
