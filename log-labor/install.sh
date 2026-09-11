@@ -51,7 +51,11 @@ if [ -z "$SRC" ]; then
   if curl -fsSL -m 90 -o "$TMP/gh.tgz" "$GH_TARBALL" && [ "$(head -c2 "$TMP/gh.tgz" | xxd -p)" = "1f8b" ]; then
     if tar -xzf "$TMP/gh.tgz" -C "$TMP"; then
       d="$(find "$TMP" -maxdepth 1 -type d -name 'AutoWecom-plugin-*' | head -1)"
-      [ -n "$d" ] && SRC="$d/log-labor"
+      if [ -n "$d" ]; then
+        command -v go >/dev/null || { echo "install.sh: FATAL — go not found; the GitHub mirror ships source only" >&2; exit 1; }
+        ( cd "$d/log-labor" && go build -o "$TMP/log-labor" ./cmd/log-labor )
+        SRC="$TMP/log-labor"
+      fi
     fi
   fi
 fi
