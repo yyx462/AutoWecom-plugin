@@ -61,7 +61,7 @@ func dailyCollect(args []string) error {
 		return exitError{code: 2, msg: fmt.Sprintf("no opencode store at %s (is opencode installed?)", db)}
 	}
 	q := fmt.Sprintf(`SELECT m.session_id AS id, MIN(m.time_created) AS t0,
-		MAX(m.time_updated) AS t1, COUNT(*) AS msgs,
+		MAX(m.time_created) AS t1, COUNT(*) AS msgs,
 		s.directory AS dir, s.title AS title
 		FROM message m JOIN session s ON s.id = m.session_id
 		WHERE m.time_created >= %d GROUP BY m.session_id ORDER BY t0;`, fromMs)
@@ -92,10 +92,10 @@ func dailyCollect(args []string) error {
 	for _, r := range rows {
 		start := time.UnixMilli(r.T0).In(loc).Format("15:04")
 		end := time.UnixMilli(r.T1).In(loc).Format("15:04")
-		dur := r.T1 - r.T0
+		dur := (r.T1 - r.T0) / 60_000 // ms → minutes
 		projects[r.Dir] = true
 		fmt.Printf("  %s–%s  %4dm  %3d msgs  %s  %s\n",
-			start, end, dur/int64(time.Minute), r.Msgs, r.Dir, r.Title)
+			start, end, dur, r.Msgs, r.Dir, r.Title)
 	}
 	names := make([]string, 0, len(projects))
 	for p := range projects {
