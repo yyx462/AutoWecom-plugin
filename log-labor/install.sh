@@ -4,9 +4,10 @@
 #   git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
 #   ./AutoWecom-plugin/log-labor/install.sh
 #
-# (The instance signs everyone in — REQUIRE_SIGNIN_VIEW — so anonymous
-# `curl … | sh` against raw URLs gets a login page, not a script. If
-# your Gitea ever allows anonymous raw, the piped one-liner works too.)
+# Anonymous one-liner via the GitHub mirror (needs `go` for the
+# source-build fallback; the corp Gitea signs everyone in, so raw URLs
+# there always return a login page):
+#   curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
 #
 # Order: build from the checkout this script lives in (no network),
 # else a Gitea release tarball (log-labor-vTAG), else a fresh shallow
@@ -45,7 +46,17 @@ if [ -z "$SRC" ]; then
   fi
 fi
 if [ -z "$SRC" ]; then
-  echo "install.sh: no usable release tarball — trying a source build from ${REF}…"
+  echo "install.sh: no usable release tarball — trying the GitHub mirror tarball…"
+  GH_TARBALL="${LOG_LABOR_GITHUB_TARBALL:-https://codeload.github.com/yyx462/AutoWecom-plugin/tar.gz/refs/heads/$REF}"
+  if curl -fsSL -m 90 -o "$TMP/gh.tgz" "$GH_TARBALL" && [ "$(head -c2 "$TMP/gh.tgz" | xxd -p)" = "1f8b" ]; then
+    if tar -xzf "$TMP/gh.tgz" -C "$TMP"; then
+      d="$(find "$TMP" -maxdepth 1 -type d -name 'AutoWecom-plugin-*' | head -1)"
+      [ -n "$d" ] && SRC="$d/log-labor"
+    fi
+  fi
+fi
+if [ -z "$SRC" ]; then
+  echo "install.sh: no GitHub mirror either — trying a source build from ${REF}…"
   git clone --depth 1 --branch "$REF" "$BASE_URL.git" "$TMP/src" 2>/dev/null \
     || git clone --depth 1 --branch "$REF" "$BASE_URL" "$TMP/src" 2>/dev/null \
     || { echo "install.sh: FATAL — no release and no git access to $BASE_URL" >&2; exit 1; }

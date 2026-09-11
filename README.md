@@ -11,7 +11,10 @@ and how to call the CLI.
 ## Install (张三's walkthrough)
 
 ```bash
-# 1. clone with your corp Gitea login, then run the installer
+# 1a. easy path — anonymous GitHub mirror (needs `go` to build):
+curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
+
+# 1b. corp path — clone with your Gitea login, then run the installer
 git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
 ./AutoWecom-plugin/log-labor/install.sh
 #   → builds from the checkout, installs to ~/.local/bin/log-labor
