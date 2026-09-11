@@ -191,6 +191,32 @@ func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any
 	return v, nil
 }
 
+// firstMap — first element of a webhook array value in either shape:
+// []any (as parsed from JSON) or []map[string]string (as built
+// in-process by BuildValues). Without both, the preview round-trip
+// silently drops person/status/link.
+func firstMap(x any) (map[string]string, bool) {
+	switch arr := x.(type) {
+	case []any:
+		if len(arr) > 0 {
+			if m, ok := arr[0].(map[string]any); ok {
+				out := make(map[string]string, len(m))
+				for k, v := range m {
+					if s, ok := v.(string); ok {
+						out[k] = s
+					}
+				}
+				return out, true
+			}
+		}
+	case []map[string]string:
+		if len(arr) > 0 {
+			return arr[0], true
+		}
+	}
+	return nil, false
+}
+
 // OptionsFromValues — inverse-ish: rebuild Options from a values map
 // (profile-driven) so preview + doctor paths share one renderer.
 func OptionsFromValues(p *config.Profile, values map[string]any) Options {
@@ -200,32 +226,43 @@ func OptionsFromValues(p *config.Profile, values map[string]any) Options {
 		return x, ok
 	}
 	if x, ok := get("person"); ok {
-		if arr, ok := x.([]any); ok && len(arr) > 0 {
-			if m, ok := arr[0].(map[string]any); ok {
-				o.Person, _ = m["user_id"].(string)
-			}
+		if m, ok := firstMap(x); ok {
+			o.Person = m["user_id"]
 		}
 	}
 	if x, ok := get("date"); ok {
 		o.Date = fmt.Sprintf("%v", x)
 	}
 	if x, ok := get("status"); ok {
-		switch arr := x.(type) {
-		case []any:
-			if len(arr) > 0 {
-				if m, ok := arr[0].(map[string]any); ok {
-					o.Status, _ = m["text"].(string)
-				}
-			}
-		case string:
-			o.Status = arr
+		if m, ok := firstMap(x); ok {
+			o.Status = m["text"]
+		} else if s, ok := x.(string); ok {
+			o.Status = s
 		}
 	}
-	if x, ok := get("content"); ok {
-		if arr, ok := x.([]any); ok && len(arr) > 0 {
-			if m, ok := arr[0].(map[string]any); ok {
-				o.Content, _ = m["text"].(string)
+	if x, ok := get("link"); ok {
+		ids := []string{}
+		switch arr := x.(type) {
+		case []any:
+			for _, e := range arr {
+				if m, ok := e.(map[string]any); ok {
+					if id, ok := m["record_id"].(string); ok {
+						ids = append(ids, id)
+					}
+				}
 			}
+		case []map[string]string:
+			for _, m := range arr {
+				if id, ok := m["record_id"]; ok {
+					ids = append(ids, id)
+				}
+			}
+		}
+		o.Link = strings.Join(ids, ",")
+	}
+	if x, ok := get("content"); ok {
+		if m, ok := firstMap(x); ok {
+			o.Content = m["text"]
 		} else if s, ok := x.(string); ok {
 			o.Content = s
 		}
@@ -237,19 +274,15 @@ func OptionsFromValues(p *config.Profile, values map[string]any) Options {
 		o.Due = fmt.Sprintf("%v", x)
 	}
 	if x, ok := get("proposer"); ok {
-		if arr, ok := x.([]any); ok && len(arr) > 0 {
-			if m, ok := arr[0].(map[string]any); ok {
-				o.Proposer, _ = m["text"].(string)
-			}
+		if m, ok := firstMap(x); ok {
+			o.Proposer = m["text"]
 		} else if s, ok := x.(string); ok {
 			o.Proposer = s
 		}
 	}
 	if x, ok := get("blocker"); ok {
-		if arr, ok := x.([]any); ok && len(arr) > 0 {
-			if m, ok := arr[0].(map[string]any); ok {
-				o.Blocker, _ = m["text"].(string)
-			}
+		if m, ok := firstMap(x); ok {
+			o.Blocker = m["text"]
 		} else if s, ok := x.(string); ok {
 			o.Blocker = s
 		}
