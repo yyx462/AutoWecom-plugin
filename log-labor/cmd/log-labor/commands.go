@@ -223,7 +223,7 @@ func cmdInit(argv []string) error {
 	if !ok {
 		return exitError{code: 1, msg: "key rejected (840001 invalid webhook) — check `log-labor config set key`"}
 	}
-	fmt.Println("key accepted.")
+	fmt.Printf("key accepted (%s).\n", maskKey(c.Key))
 	if f.has("no-sample") {
 		return nil
 	}
@@ -378,7 +378,7 @@ func cmdConfig(argv []string) error {
 		if err := c.Save(); err != nil {
 			return exitError{code: 2, msg: err.Error()}
 		}
-		fmt.Println("saved.")
+		fmt.Printf("saved (%s).\n", maskKey(c.Key))
 		return nil
 	default:
 		return exitError{code: 2, msg: fmt.Sprintf("unknown config command %q", f.args[0])}
