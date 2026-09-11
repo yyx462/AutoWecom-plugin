@@ -78,7 +78,7 @@ func DefaultProfile() Profile {
 			"proposer": f("fEyXeR", "提出人", "text"),
 			"blocker":  f("f1QYcV", "卡点", "text"),
 		},
-		FieldOrder: []string{"person", "date", "status", "content", "link", "hours", "due", "proposer", "blocker"},
+		FieldOrder: []string{"date", "person", "status", "content", "link", "hours", "due", "proposer", "blocker"},
 	}
 }
 
