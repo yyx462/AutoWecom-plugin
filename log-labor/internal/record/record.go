@@ -1,0 +1,302 @@
+// Package record — build smartsheet values from CLI options + render the
+// human preview. All shapes live-proved 2026-09-11:
+//
+//	text                 plain string                 (readback [{text,type}])
+//	number               bare number                  (bare)
+//	date_time            ms-epoch STRING              (echoed as sent)
+//	single_select        [{"text":opt}] by option text (readback option id)
+//	user                 [{"user_id":CORP_ID}]        (woa-/numeric → atomic 40031)
+//	two_way_link_records [{"record_id":R}]
+package record
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config"
+)
+
+// cst — China Standard Time, fixed +08:00 (no DST → FixedZone is exact and
+// needs no tzdata on the host).
+var cst = time.FixedZone("CST", 8*3600)
+
+// Options — what one add/update carries (unset ⇒ omitted from the row).
+type Options struct {
+	Person   string // corp userid; "person" field omitted when empty
+	Date     string // YYYY-MM-DD or bare ms
+	Status   string
+	Content  string
+	Link     string // record id(s), comma-separated
+	Hours    string // float or trailing-h forms ("3", "2.5", "1h", "2小时")
+	Due      string
+	Proposer string
+	Blocker  string
+}
+
+// DateToMs — "2026-09-11" → that day 00:00 +08 as ms STRING; bare ms →
+// passthrough (the sheet convention stores the epoch STRING).
+func DateToMs(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	if isAllDigits(s) {
+		return s, nil
+	}
+	t, err := time.ParseInLocation("2006-01-02", s, cst)
+	if err != nil {
+		return "", fmt.Errorf("bad date %q (want YYYY-MM-DD or epoch-ms)", s)
+	}
+	return strconv.FormatInt(t.UnixMilli(), 10), nil
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// NormalizeHours — "3", "2.5", "1h", "2小时" → float string; validates.
+func NormalizeHours(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(strings.TrimSuffix(s, "h"), "H")
+	s = strings.TrimSuffix(s, "小时")
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || f < 0 {
+		return "", fmt.Errorf("bad hours %q (want a number, e.g. 2.5)", s)
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64), nil
+}
+
+// CnDate — ms or YYYY-MM-DD → 2026年9月11日 (preview only; best-effort).
+func CnDate(s string) string {
+	ms, err := DateToMs(s)
+	if err != nil || ms == "" {
+		return s
+	}
+	n, err := strconv.ParseInt(ms, 10, 64)
+	if err != nil {
+		return s
+	}
+	t := time.UnixMilli(n).In(cst)
+	return fmt.Sprintf("%d年%d月%d日", t.Year(), int(t.Month()), t.Day())
+}
+
+// BuildValues — typed values map keyed by field id; only the set fields.
+// Date defaults to today (+08) when addDefaults is set (add mode).
+func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any, error) {
+	f := p.Fields
+	v := map[string]any{}
+
+	setUser := func(role, val string) error {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return nil
+		}
+		if strings.HasPrefix(val, "woa-") {
+			return fmt.Errorf("%s: %q is a bot-namespace id — the webhook rejects it atomically (40031); use the corp userid (e.g. zhang.san)", role, val)
+		}
+		v[f[role].ID] = []map[string]string{{"user_id": val}}
+		return nil
+	}
+	setDate := func(role, val string) error {
+		ms, err := DateToMs(val)
+		if err != nil {
+			return fmt.Errorf("%s: %w", role, err)
+		}
+		if ms != "" {
+			v[f[role].ID] = ms
+		}
+		return nil
+	}
+
+	if err := setUser("person", o.Person); err != nil {
+		return nil, err
+	}
+	if err := setDate("date", o.Date); err != nil {
+		return nil, err
+	}
+	if o.Status != "" {
+		ok := false
+		for _, s := range p.Statuses {
+			if s == o.Status {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return nil, fmt.Errorf("status must be one of: %s", strings.Join(p.Statuses, " "))
+		}
+		v[f["status"].ID] = []map[string]string{{"text": o.Status}}
+	}
+	if o.Content != "" {
+		v[f["content"].ID] = o.Content
+	}
+	if o.Link != "" {
+		ids := []map[string]string{}
+		for _, id := range strings.Split(o.Link, ",") {
+			if id = strings.TrimSpace(id); id != "" {
+				ids = append(ids, map[string]string{"record_id": id})
+			}
+		}
+		if len(ids) > 0 {
+			v[f["link"].ID] = ids
+		}
+	}
+	if o.Hours != "" {
+		h, err := NormalizeHours(o.Hours)
+		if err != nil {
+			return nil, fmt.Errorf("hours: %w", err)
+		}
+		num, _ := strconv.ParseFloat(h, 64)
+		v[f["hours"].ID] = num
+	}
+	if err := setDate("due", o.Due); err != nil {
+		return nil, err
+	}
+	if o.Proposer != "" {
+		v[f["proposer"].ID] = o.Proposer
+	}
+	if o.Blocker != "" {
+		v[f["blocker"].ID] = o.Blocker
+	}
+
+	if addDefaults {
+		if _, ok := v[f["date"].ID]; !ok {
+			today, _ := DateToMs(time.Now().In(cst).Format("2006-01-02"))
+			v[f["date"].ID] = today
+		}
+		if _, ok := v[f["status"].ID]; !ok {
+			def := "进行中"
+			for _, s := range p.Statuses {
+				if s == def {
+					goto found
+				}
+			}
+			if len(p.Statuses) > 0 {
+				def = p.Statuses[0]
+			}
+		found:
+			v[f["status"].ID] = []map[string]string{{"text": def}}
+		}
+	}
+	return v, nil
+}
+
+// OptionsFromValues — inverse-ish: rebuild Options from a values map
+// (profile-driven) so preview + doctor paths share one renderer.
+func OptionsFromValues(p *config.Profile, values map[string]any) Options {
+	o := Options{}
+	get := func(role string) (any, bool) {
+		x, ok := values[p.Fields[role].ID]
+		return x, ok
+	}
+	if x, ok := get("person"); ok {
+		if arr, ok := x.([]any); ok && len(arr) > 0 {
+			if m, ok := arr[0].(map[string]any); ok {
+				o.Person, _ = m["user_id"].(string)
+			}
+		}
+	}
+	if x, ok := get("date"); ok {
+		o.Date = fmt.Sprintf("%v", x)
+	}
+	if x, ok := get("status"); ok {
+		switch arr := x.(type) {
+		case []any:
+			if len(arr) > 0 {
+				if m, ok := arr[0].(map[string]any); ok {
+					o.Status, _ = m["text"].(string)
+				}
+			}
+		case string:
+			o.Status = arr
+		}
+	}
+	if x, ok := get("content"); ok {
+		if arr, ok := x.([]any); ok && len(arr) > 0 {
+			if m, ok := arr[0].(map[string]any); ok {
+				o.Content, _ = m["text"].(string)
+			}
+		} else if s, ok := x.(string); ok {
+			o.Content = s
+		}
+	}
+	if x, ok := get("hours"); ok {
+		o.Hours = fmt.Sprintf("%v", x)
+	}
+	if x, ok := get("due"); ok {
+		o.Due = fmt.Sprintf("%v", x)
+	}
+	if x, ok := get("proposer"); ok {
+		if arr, ok := x.([]any); ok && len(arr) > 0 {
+			if m, ok := arr[0].(map[string]any); ok {
+				o.Proposer, _ = m["text"].(string)
+			}
+		} else if s, ok := x.(string); ok {
+			o.Proposer = s
+		}
+	}
+	if x, ok := get("blocker"); ok {
+		if arr, ok := x.([]any); ok && len(arr) > 0 {
+			if m, ok := arr[0].(map[string]any); ok {
+				o.Blocker, _ = m["text"].(string)
+			}
+		} else if s, ok := x.(string); ok {
+			o.Blocker = s
+		}
+	}
+	return o
+}
+
+// Preview — the user-facing table (tab-separated, 中文 dates), matching
+// the sheet's column order. Only the fields present in values are shown.
+func Preview(p *config.Profile, values map[string]any) string {
+	o := OptionsFromValues(p, values)
+	cells := []string{}
+	for _, role := range p.FieldOrder {
+		var s string
+		switch role {
+		case "person":
+			s = o.Person
+		case "date":
+			s = CnDate(o.Date)
+		case "status":
+			s = o.Status
+		case "content":
+			s = o.Content
+		case "link":
+			s = o.Link
+		case "hours":
+			s = o.Hours
+		case "due":
+			s = CnDate(o.Due)
+		case "proposer":
+			s = o.Proposer
+		case "blocker":
+			s = o.Blocker
+		}
+		if s == "" {
+			s = "—"
+		}
+		cells = append(cells, s)
+	}
+	var b strings.Builder
+	b.WriteString("   | " + strings.Join(p.FieldOrder, " | ") + " |\n")
+	for range p.FieldOrder {
+		b.WriteString("---|")
+	}
+	b.WriteString("\n")
+	b.WriteString("   | " + strings.Join(cells, " | ") + " |\n")
+	return strings.NewReplacer("person", "人员", "date", "日期", "status", "状态",
+		"content", "需求内容", "link", "关联", "hours", "预计花费工时",
+		"due", "预计完成时间", "proposer", "提出人", "blocker", "卡点").Replace(b.String())
+}

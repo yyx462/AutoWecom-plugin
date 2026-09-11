@@ -1,5 +1,5 @@
-node_modules/
-__pycache__/
-*.pyc
 .DS_Store
-.yyx-meta.json
+dist/
+*.tar.gz
+log-labor/log-labor
+log-labor/dist/

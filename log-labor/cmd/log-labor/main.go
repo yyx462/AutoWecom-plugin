@@ -1,0 +1,71 @@
+// log-labor — 报工 CLI for the team labor smartsheet (WeCom 智能表格
+// webhook). Pure stdlib; the webhook contract is live-proved — see
+// internal/webhook and skill/SKILL.md.tmpl.
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config"
+)
+
+var version = config.Version
+
+func main() {
+	args := os.Args[1:]
+	if len(args) == 0 {
+		usage()
+		os.Exit(2)
+	}
+	if err := dispatch(args); err != nil {
+		fmt.Fprintf(os.Stderr, "log-labor: %v\n", err)
+		if ec, ok := err.(exitError); ok {
+			os.Exit(ec.code)
+		}
+		os.Exit(1)
+	}
+}
+
+func usage() {
+	fmt.Print(`log-labor ` + version + ` — 报工 into the ` + "`任务工时详细`" + ` smartsheet
+
+  log-labor init                                  configure key + corp id (+ sample row)
+  log-labor add -c "内容" -h 2.5 [--date --status --person
+                    --proposer --blocker --due --link] [--yes] [--dry-run]
+  log-labor update --record-id R [same field flags]
+  log-labor doctor [--write-sample]               config + key health, no writes
+  log-labor config get|set|list|path [key] [value]
+  log-labor skill install|upgrade|uninstall|render [--agent NAME|--all] [--project]
+  log-labor version
+
+Exit codes: 0 ok · 1 WeCom error · 2 usage/config.
+Key + corp id live in ~/.config/log-labor/config.json (0600).
+`)
+}
+
+func dispatch(args []string) error {
+	switch args[0] {
+	case "init":
+		return cmdInit(args[1:])
+	case "add":
+		return cmdAdd(args[1:])
+	case "update":
+		return cmdUpdate(args[1:])
+	case "doctor":
+		return cmdDoctor(args[1:])
+	case "config":
+		return cmdConfig(args[1:])
+	case "skill":
+		return cmdSkill(args[1:])
+	case "version", "--version", "-v":
+		fmt.Println("log-labor " + version)
+		return nil
+	case "help", "--help", "-h":
+		usage()
+		return nil
+	default:
+		usage()
+		return exitError{code: 2, msg: fmt.Sprintf("unknown command %q", args[0])}
+	}
+}
