@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/sources"
 	"os"
 	"path/filepath"
 )
@@ -25,18 +26,19 @@ type Field struct {
 type Profile struct {
 	SheetName  string           `json:"sheet_name"`
 	Statuses   []string         `json:"statuses"`
-	Fields     map[string]Field `json:"fields"`       // keyed by role: person/date/status/content/link/hours/due/proposer/blocker
-	FieldOrder []string         `json:"field_order"`  // display + preview order
+	Fields     map[string]Field `json:"fields"`      // keyed by role: person/date/status/content/link/hours/due/proposer/blocker
+	FieldOrder []string         `json:"field_order"` // display + preview order
 }
 
 // Config — the on-disk document.
 type Config struct {
-	Endpoint string  `json:"endpoint"` // webhook base URL (key appended per call)
-	Key      string  `json:"key"`      // sheet webhook key — WRITE CREDENTIAL
-	Person   string  `json:"person"`   // caller's corp userid (e.g. zhang.san)
-	Mode     string  `json:"mode"`     // direct (default) | core (broker endpoint; vNext)
-	BrokerURL string `json:"broker_url,omitempty"` // core mode only
-	Profile  Profile `json:"profile"`
+	Endpoint  string           `json:"endpoint"`             // webhook base URL (key appended per call)
+	Key       string           `json:"key"`                  // sheet webhook key — WRITE CREDENTIAL
+	Person    string           `json:"person"`               // caller's corp userid (e.g. zhang.san)
+	Mode      string           `json:"mode"`                 // direct (default) | core (broker endpoint; vNext)
+	BrokerURL string           `json:"broker_url,omitempty"` // core mode only
+	Profile   Profile          `json:"profile"`
+	Sources   []sources.Source `json:"sources,omitempty"` // session stores for daily collect
 }
 
 // Dir — config directory (~/.config/log-labor, honor $XDG_CONFIG_HOME).
