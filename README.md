@@ -70,7 +70,9 @@ Install the skill (step 4 above) — it teaches your agent the whole
 protocol: value shapes, one-op-per-request, atomic 40031 on bad user ids,
 rate caps, and exactly how to draft 需求内容 and call `log-labor`. The
 rendered skill lives at `log-labor/skill/SKILL.md`; the embedded template
-is the source of truth.
+is the source of truth. For the day-to-day experience — what to say to
+your agent, where skills land per harness, troubleshooting — see
+[docs/USAGE.md](docs/USAGE.md).
 
 ## Building from source
 
