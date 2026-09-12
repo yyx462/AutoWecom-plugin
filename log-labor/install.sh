@@ -20,9 +20,21 @@ REF="${LOG_LABOR_REF:-master}"
 VERSION="${LOG_LABOR_VERSION:-v0.1.0}"
 BIN_DIR="${LOG_LABOR_BIN_DIR:-$HOME/.local/bin}"
 
-OS="$(uname -s | tr '[:upper:]' '[:lower:]')"          # darwin|linux
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"          # darwin|linux|windows
+# Git Bash / MSYS / Cygwin report mingw64_nt-*, msys_nt-*, cygwin_nt-* —
+# treat all of those as windows; GOOS handles the rest.
+case "$OS" in
+  mingw*|msys*|cygwin*) OS=windows ;;
+esac
 ARCH="$(uname -m)"; [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ] && ARCH=arm64 || ARCH=amd64
-[ "$OS" = "darwin" ] || [ "$OS" = "linux" ] || { echo "install.sh: unsupported os $OS" >&2; exit 1; }
+[ "$OS" = "darwin" ] || [ "$OS" = "linux" ] || [ "$OS" = "windows" ] || { echo "install.sh: unsupported os $OS" >&2; exit 1; }
+
+# On windows the binary needs the .exe suffix, everywhere.
+if [ "$OS" = "windows" ]; then
+  EXE=".exe"
+else
+  EXE=""
+fi
 
 TAG="log-labor-${VERSION}"
 TGZ="log-labor_${VERSION}_${OS}_${ARCH}.tar.gz"
@@ -30,31 +42,34 @@ URL="$BASE_URL/releases/download/$TAG/$TGZ"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# gzip magic (1f8b) check; xxd is absent from some minimal Git Bash installs.
+is_gzip() { head -c2 "$1" | od -An -tx1 | tr -d ' \n' | grep -q '^1f8b'; }
+
 echo "install.sh: looking for a source to build…"
 SRC=""
 HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$HERE/go.mod" ]; then
   echo "install.sh: building from the local checkout at $HERE"
   command -v go >/dev/null || { echo "install.sh: FATAL — go not found; install go or use a release tarball" >&2; exit 1; }
-  ( cd "$HERE" && go build -o "$TMP/log-labor" ./cmd/log-labor )
-  SRC="$TMP/log-labor"
+  ( cd "$HERE" && go build -o "$TMP/log-labor$EXE" ./cmd/log-labor )
+  SRC="$TMP/log-labor$EXE"
 fi
 if [ -z "$SRC" ]; then
   echo "install.sh: no local checkout — trying release $TAG ($OS/$ARCH)…"
-  if curl -fsSL -m 60 -o "$TMP/$TGZ" "$URL" && [ "$(head -c2 "$TMP/$TGZ" | xxd -p)" = "1f8b" ]; then
-    tar -xzf "$TMP/$TGZ" -C "$TMP" && SRC="$TMP/log-labor"
+  if curl -fsSL -m 60 -o "$TMP/$TGZ" "$URL" && is_gzip "$TMP/$TGZ"; then
+    tar -xzf "$TMP/$TGZ" -C "$TMP" && SRC="$TMP/log-labor$EXE"
   fi
 fi
 if [ -z "$SRC" ]; then
   echo "install.sh: no usable release tarball — trying the GitHub mirror tarball…"
   GH_TARBALL="${LOG_LABOR_GITHUB_TARBALL:-https://codeload.github.com/yyx462/AutoWecom-plugin/tar.gz/refs/heads/$REF}"
-  if curl -fsSL -m 90 -o "$TMP/gh.tgz" "$GH_TARBALL" && [ "$(head -c2 "$TMP/gh.tgz" | xxd -p)" = "1f8b" ]; then
+  if curl -fsSL -m 90 -o "$TMP/gh.tgz" "$GH_TARBALL" && is_gzip "$TMP/gh.tgz"; then
     if tar -xzf "$TMP/gh.tgz" -C "$TMP"; then
       d="$(find "$TMP" -maxdepth 1 -type d -name 'AutoWecom-plugin-*' | head -1)"
       if [ -n "$d" ]; then
         command -v go >/dev/null || { echo "install.sh: FATAL — go not found; the GitHub mirror ships source only" >&2; exit 1; }
-        ( cd "$d/log-labor" && go build -o "$TMP/log-labor" ./cmd/log-labor )
-        SRC="$TMP/log-labor"
+        ( cd "$d/log-labor" && go build -o "$TMP/log-labor$EXE" ./cmd/log-labor )
+        SRC="$TMP/log-labor$EXE"
       fi
     fi
   fi
@@ -65,23 +80,32 @@ if [ -z "$SRC" ]; then
     || git clone --depth 1 --branch "$REF" "$BASE_URL" "$TMP/src" 2>/dev/null \
     || { echo "install.sh: FATAL — no release and no git access to $BASE_URL" >&2; exit 1; }
   command -v go >/dev/null || { echo "install.sh: FATAL — go not found; install go or ask for a release tarball" >&2; exit 1; }
-  ( cd "$TMP/src/log-labor" && go build -o "$TMP/log-labor" ./cmd/log-labor )
-  SRC="$TMP/log-labor"
+  ( cd "$TMP/src/log-labor" && go build -o "$TMP/log-labor$EXE" ./cmd/log-labor )
+  SRC="$TMP/log-labor$EXE"
 fi
 
 mkdir -p "$BIN_DIR"
 if [ -w "$BIN_DIR" ]; then
-  mv "$SRC" "$BIN_DIR/log-labor"
+  mv "$SRC" "$BIN_DIR/log-labor$EXE"
+elif [ "$OS" = "windows" ]; then
+  echo "install.sh: FATAL — $BIN_DIR not writable" >&2; exit 1
 else
   echo "install.sh: $BIN_DIR not writable — using sudo"
-  sudo mv "$SRC" "$BIN_DIR/log-labor"
+  sudo mv "$SRC" "$BIN_DIR/log-labor$EXE"
 fi
-chmod +x "$BIN_DIR/log-labor"
-echo "installed: $BIN_DIR/log-labor"
+[ "$OS" = "windows" ] || chmod +x "$BIN_DIR/log-labor$EXE"
+echo "installed: $BIN_DIR/log-labor$EXE"
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
-  *) echo "NOTE: $BIN_DIR is not on your PATH — add it (e.g. in ~/.zshrc: export PATH=\"$BIN_DIR:\$PATH\")" ;;
+  *)
+    if [ "$OS" = "windows" ]; then
+      echo "NOTE: $BIN_DIR is not on your PATH — add it in ~/.bashrc (export PATH=\"$BIN_DIR:\$PATH\"),"
+      echo "      or add %USERPROFILE%\\.local\\bin via Windows Settings > Environment Variables for non-bash shells"
+    else
+      echo "NOTE: $BIN_DIR is not on your PATH — add it (e.g. in ~/.zshrc: export PATH=\"$BIN_DIR:\$PATH\")"
+    fi
+    ;;
 esac
 
 cat <<'NEXT'

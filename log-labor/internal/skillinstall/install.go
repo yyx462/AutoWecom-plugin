@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config"
@@ -38,10 +39,20 @@ const end = "<!-- log-labor end -->"
 func Agents() []Agent {
 	home, _ := os.UserHomeDir()
 	j := filepath.Join
+	// opencode's global config lives under XDG (~/.config/opencode) on unix
+	// but %AppData%\opencode on windows; prefer whichever exists.
+	ocRoot := j(home, ".config", "opencode")
+	if runtime.GOOS == "windows" {
+		if d, err := os.UserConfigDir(); err == nil {
+			if _, err := os.Stat(j(d, "opencode")); err == nil {
+				ocRoot = j(d, "opencode")
+			}
+		}
+	}
 	return []Agent{
 		{Name: "claude", Desc: "Claude Code", Root: j(home, ".claude"), Global: j(home, ".claude", "skills", "log-labor"),
 			Project: map[string]string{".claude/skills/log-labor": "skill"}},
-		{Name: "opencode", Desc: "opencode", Root: j(home, ".config", "opencode"), Global: j(home, ".config", "opencode", "skills", "log-labor"),
+		{Name: "opencode", Desc: "opencode", Root: ocRoot, Global: j(ocRoot, "skills", "log-labor"),
 			Project: map[string]string{".opencode/skills/log-labor": "skill"}},
 		{Name: "codex", Desc: "Codex CLI", Root: j(home, ".codex"), Global: j(home, ".codex", "skills", "log-labor"),
 			Project: map[string]string{".codex/skills/log-labor": "skill"}},
