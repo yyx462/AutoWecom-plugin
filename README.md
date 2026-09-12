@@ -21,12 +21,19 @@ git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
 #   (git.sh.nint.com signs everyone in, so a piped curl gets the login
 #   page — clone first, then run)
 
+# Windows: run either path inside Git Bash (https://git-scm.com) with `go`
+# installed — the installer detects MSYS/MINGW, builds log-labor.exe, and
+# installs to %USERPROFILE%\.local\bin. Add that dir to PATH (~/.bashrc for
+# bash, or Windows Settings > Environment Variables for cmd/PowerShell).
+# Manual fallback: cd log-labor && go build -o log-labor.exe ./cmd/log-labor
+
 # 2. configure — wizard asks for the sheet webhook key + your corp id
 log-labor init
 #   ? Webhook key: nkVN…********************************…X9z
 #   ? 你的企业userid (corp id): zhang.san
 #   ? Sheet name [任务工时详细]: ⏎
 #   config written to ~/.config/log-labor/config.json (0600)
+#   (Windows/Git Bash: %AppData%\log-labor\config.json)
 
 # 3. prove the pipeline with one clearly-marked sample row (asks first)
 log-labor doctor --write-sample

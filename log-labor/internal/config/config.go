@@ -10,6 +10,7 @@ import (
 	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/sources"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Version is stamped at build time (-ldflags "-X …/config.Version=v…").
@@ -41,10 +42,16 @@ type Config struct {
 	Sources   []sources.Source `json:"sources,omitempty"` // session stores for daily collect
 }
 
-// Dir — config directory (~/.config/log-labor, honor $XDG_CONFIG_HOME).
+// Dir — config directory (~/.config/log-labor, honor $XDG_CONFIG_HOME;
+// %AppData%\log-labor on windows, honoring os.UserConfigDir).
 func Dir() (string, error) {
 	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
 		return filepath.Join(x, "log-labor"), nil
+	}
+	if runtime.GOOS == "windows" {
+		if d, err := os.UserConfigDir(); err == nil {
+			return filepath.Join(d, "log-labor"), nil
+		}
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
