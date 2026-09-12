@@ -42,7 +42,7 @@ type Source struct {
 }
 
 // KnownFormats — formats `daily sources add` accepts.
-var KnownFormats = []string{"opencode-sqlite", "jsonl-claude", "jsonl-generic"}
+var KnownFormats = []string{"opencode-sqlite", "jsonl-claude", "jsonl-codex", "jsonl-generic"}
 
 // DefaultOpencodeDB — opencode's standard sqlite store.
 func DefaultOpencodeDB() string {
@@ -56,6 +56,12 @@ func DefaultClaudeDir() string {
 	return filepath.Join(home, ".claude", "projects")
 }
 
+// DefaultCodexDir — OpenAI Codex CLI rollout store.
+func DefaultCodexDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".codex", "sessions")
+}
+
 // BuiltIns — the verified defaults, included only when their store
 // exists on this machine.
 func BuiltIns() []Source {
@@ -65,6 +71,9 @@ func BuiltIns() []Source {
 	}
 	if st, err := os.Stat(DefaultClaudeDir()); err == nil && st.IsDir() {
 		out = append(out, Source{Name: "claude", Format: "jsonl-claude", Path: DefaultClaudeDir()})
+	}
+	if st, err := os.Stat(DefaultCodexDir()); err == nil && st.IsDir() {
+		out = append(out, Source{Name: "codex", Format: "jsonl-codex", Path: DefaultCodexDir()})
 	}
 	return out
 }
@@ -76,6 +85,8 @@ func Collect(s Source, fromMs int64) ([]Session, error) {
 		return CollectOpencode(s.Path, fromMs)
 	case "jsonl-claude":
 		return CollectClaudeJSONL(s.Path, fromMs)
+	case "jsonl-codex":
+		return CollectCodexJSONL(s.Path, fromMs)
 	case "jsonl-generic":
 		return CollectGenericJSONL(s, fromMs)
 	default:
@@ -173,6 +184,88 @@ func CollectClaudeJSONL(root string, fromMs int64) ([]Session, error) {
 		}
 	}
 	return ss, nil
+}
+
+// codexBoilerplate — Codex injects context as fake user messages;
+// none of these belong in a digest title.
+var codexBoilerplate = []string{
+	"<environment_context", "<permissions", "# AGENTS.md",
+	"<image", "<user_instructions", "<turn_context",
+}
+
+func isRealUserText(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	for _, p := range codexBoilerplate {
+		if strings.HasPrefix(s, p) {
+			return false
+		}
+	}
+	return true
+}
+
+// codexUserText — first real user ask from a rollout line:
+// event_msg/user_message.payload.message, or response_item/user
+// content[].input_text.
+func codexUserText(o map[string]any) string {
+	t, _ := o["type"].(string)
+	p, _ := o["payload"].(map[string]any)
+	if p == nil {
+		return ""
+	}
+	switch t {
+	case "event_msg":
+		if pt, _ := p["type"].(string); pt == "user_message" {
+			if m, _ := p["message"].(string); isRealUserText(m) {
+				return truncate(m)
+			}
+		}
+	case "response_item":
+		if pt, _ := p["type"].(string); pt == "message" {
+			if role, _ := p["role"].(string); role == "user" {
+				if cs, ok := p["content"].([]any); ok {
+					for _, c := range cs {
+						cm, _ := c.(map[string]any)
+						if tm, _ := cm["type"].(string); tm == "input_text" {
+							if x, _ := cm["text"].(string); isRealUserText(x) {
+								return truncate(x)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// CollectCodexJSONL — OpenAI Codex CLI rollout store (~/.codex/sessions):
+// line-JSON {timestamp, type, payload}; one rollout file = one session
+// (session_meta carries uuid + cwd, but every line is file-scoped, so
+// the session key is per-file). Title: first real user message —
+// boilerplate context injections never win.
+func CollectCodexJSONL(root string, fromMs int64) ([]Session, error) {
+	return walkJSONL(root, fromMs, func(o map[string]any, acc *acc) {
+		ms, ok := parseTime(o["timestamp"])
+		if !ok {
+			return
+		}
+		acc.see(ms)
+		if acc.Title == "" {
+			acc.Title = codexUserText(o)
+		}
+	}, func(o map[string]any) string {
+		return "" // per-file: one rollout = one session
+	}, func(o map[string]any) string {
+		if p, ok := o["payload"].(map[string]any); ok {
+			if c, _ := p["cwd"].(string); c != "" {
+				return c
+			}
+		}
+		return ""
+	})
 }
 
 // CollectGenericJSONL — declared-field line-JSON: the escape hatch for

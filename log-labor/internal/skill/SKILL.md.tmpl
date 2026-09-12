@@ -73,9 +73,9 @@ parallel agent sessions all day and reports at once:
 ## Session sources — setup for any agent
 
 `daily collect` auto-detects the verified built-ins: opencode
-(~/.local/share/opencode/opencode.db) and Claude Code
-(~/.claude/projects). Any OTHER harness with durable line-JSON session
-logs needs a one-time registration — the agent does this itself:
+(~/.local/share/opencode/opencode.db), Claude Code (~/.claude/projects),
+and Codex (~/.codex/sessions). Any OTHER harness with durable line-JSON
+session logs needs a one-time registration — the agent does this itself:
 
 1. Probe: does this harness write session files anywhere under
    `~/.<agent>/`? Look for sqlite stores or `*.jsonl` with per-line
@@ -87,8 +87,9 @@ logs needs a one-time registration — the agent does this itself:
    `log-labor daily sources add --name <harness> --format jsonl-generic \
       --path <dir> --timestamp-field ts --cwd-field project \
       --session-field sid --title-field what`
-   (opencode is built-in; no registration needed. The sqlite family is
-   opencode-only — other sqlite stores are NOT supported yet.)
+   (opencode, Claude Code and Codex are built-in; no registration
+   needed. The sqlite family is opencode-only — other sqlite stores are
+   NOT supported yet.)
 3. Verify BEFORE trusting it:
    `log-labor daily sources test --name <harness> [--date YYYY-MM-DD]`
    → session count + sample rows. Then `daily collect` — every digest

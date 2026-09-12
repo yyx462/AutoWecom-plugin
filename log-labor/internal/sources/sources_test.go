@@ -121,3 +121,45 @@ func TestKnownFormats(t *testing.T) {
 		t.Error("bogus format must error with unknown format")
 	}
 }
+
+func TestCollectCodexJSONL(t *testing.T) {
+	root := t.TempDir()
+	day := "2026/09/11"
+	// faithful rollout shape: session_meta → boilerplate user → real user → assistant
+	mustWrite(t, filepath.Join(root, day, "rollout-20260911T100000-abc.jsonl"),
+		`{"timestamp":"2026-09-11T10:00:00+08:00","type":"session_meta","payload":{"id":"019e-abc","timestamp":"2026-09-11T10:00:00+08:00","cwd":"/Users/x/projC","originator":"codex_cli_rs","cli_version":"1.0"}}
+{"timestamp":"2026-09-11T10:00:01+08:00","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<user_instructions>/tmp/AGENTS.md</user_instructions>"}]}}
+{"timestamp":"2026-09-11T10:00:05+08:00","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"修复 nightly 测试"}]}}
+{"timestamp":"2026-09-11T10:30:00+08:00","type":"event_msg","payload":{"type":"user_message","message":"顺便跑一下 CI"}}
+`)
+	// a rollout with no session_meta: dir falls back to empty, title from event_msg
+	mustWrite(t, filepath.Join(root, day, "rollout-20260911T120000-def.jsonl"),
+		`{"timestamp":"2026-09-11T12:00:00+08:00","type":"event_msg","payload":{"type":"user_message","message":"调试 airflow dag"}}`)
+
+	ss, err := CollectCodexJSONL(root, t0ms-3600_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ss) != 2 {
+		t.Fatalf("want 2 sessions, got %d: %+v", len(ss), ss)
+	}
+	byTitle := map[string]Session{}
+	for _, s := range ss {
+		byTitle[s.Title] = s
+	}
+	main, ok := byTitle["修复 nightly 测试"]
+	if !ok {
+		t.Fatalf("boilerplate title must lose to real user text: %+v", ss)
+	}
+	if main.Dir != "/Users/x/projC" || main.Msgs != 4 || main.Start != t0ms {
+		t.Errorf("meta session wrong: %+v", main)
+	}
+	def, ok := byTitle["调试 airflow dag"]
+	if !ok || def.Dir != "" {
+		t.Errorf("meta-less session wrong: %+v", def)
+	}
+	// day filter: boundary after both fixtures' starts drops everything
+	if ss, _ := CollectCodexJSONL(root, t0ms+12*3600_000+60_000); len(ss) != 0 {
+		t.Errorf("day filter should drop everything, got %d", len(ss))
+	}
+}
