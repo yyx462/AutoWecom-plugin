@@ -1,0 +1,53 @@
+# release.yml — on tag log-labor-vX.Y.Z: cross-build the 5 release
+# binaries and attach the tarballs to the GitHub Release. This is what
+# makes install.sh's public one-liner work (it downloads exactly these
+# tarballs by name: log-labor_${VERSION}_${OS}_${ARCH}.tar.gz).
+#
+# No secrets needed: the runner's built-in GITHUB_TOKEN (contents:write)
+# publishes the release. Publishing = pushing a tag; delete/re-push the
+# tag to re-run.
+name: release
+
+on:
+  push:
+    tags: ["log-labor-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: log-labor
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: cross-build + package
+        run: |
+          VERSION="${GITHUB_REF_NAME#log-labor-}"
+          LDFLAGS="-X git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config.Version=${VERSION}"
+          mkdir -p dist
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do
+            os="${target%/*}"; arch="${target#*/}"
+            exe="log-labor"; [ "$os" = "windows" ] && exe="log-labor.exe"
+            echo "building ${os}/${arch}…"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "dist/$exe" ./cmd/log-labor
+            tar -czf "dist/log-labor_${VERSION}_${os}_${arch}.tar.gz" -C dist "$exe"
+            rm "dist/$exe"
+          done
+          ls -la dist
+
+      - name: publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#log-labor-}"
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz \
+            --title "log-labor ${VERSION}" \
+            --generate-notes

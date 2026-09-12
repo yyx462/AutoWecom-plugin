@@ -11,21 +11,16 @@ and how to call the CLI.
 ## Install (张三's walkthrough)
 
 ```bash
-# 1a. easy path — anonymous GitHub mirror (needs `go` to build):
+# 1. install — one-liner, no toolchain: fetches the prebuilt binary for
+#    your OS/arch from GitHub Releases (npm/npx packages are planned:
+#    `npm i -g log-labor`)
 curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
+#   → installs to ~/.local/bin/log-labor
 
-# 1b. corp path — clone with your Gitea login, then run the installer
-git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
-./AutoWecom-plugin/log-labor/install.sh
-#   → builds from the checkout, installs to ~/.local/bin/log-labor
-#   (git.sh.nint.com signs everyone in, so a piped curl gets the login
-#   page — clone first, then run)
-
-# Windows: run either path inside Git Bash (https://git-scm.com) with `go`
-# installed — the installer detects MSYS/MINGW, builds log-labor.exe, and
-# installs to %USERPROFILE%\.local\bin. Add that dir to PATH (~/.bashrc for
+# Windows: run the same line inside Git Bash (https://git-scm.com) —
+# the installer detects MSYS/MINGW, fetches log-labor.exe, and installs
+# to %USERPROFILE%\.local\bin. Add that dir to PATH (~/.bashrc for
 # bash, or Windows Settings > Environment Variables for cmd/PowerShell).
-# Manual fallback: cd log-labor && go build -o log-labor.exe ./cmd/log-labor
 
 # 2. configure — wizard asks for the sheet webhook key + your corp id
 log-labor init
