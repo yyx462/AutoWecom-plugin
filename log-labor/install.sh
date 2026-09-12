@@ -1,24 +1,16 @@
 #!/usr/bin/env bash
 # install.sh — installer for the log-labor CLI.
 #
-#   git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
-#   ./AutoWecom-plugin/log-labor/install.sh
-#
-# Anonymous one-liner via the GitHub mirror (needs `go` for the
-# source-build fallback; the corp Gitea signs everyone in, so raw URLs
-# there always return a login page):
+# Public one-liner (downloads a prebuilt release binary, no toolchain):
 #   curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
 #
-# Order: build from the checkout this script lives in (no network),
-# else a Gitea release tarball (log-labor-vTAG), else a fresh shallow
-# clone + source build. Never touches credentials — `log-labor init`
-# does that.
+# Run from inside a checkout (developers): builds from that source,
+# needs `go`. Never touches credentials — `log-labor init` does that.
 set -euo pipefail
 
-BASE_URL="${LOG_LABOR_BASE_URL:-https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin}"
-REF="${LOG_LABOR_REF:-master}"
 VERSION="${LOG_LABOR_VERSION:-v0.1.0}"
 BIN_DIR="${LOG_LABOR_BIN_DIR:-$HOME/.local/bin}"
+RELEASES="https://github.com/yyx462/AutoWecom-plugin/releases"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"          # darwin|linux|windows
 # Git Bash / MSYS / Cygwin report mingw64_nt-*, msys_nt-*, cygwin_nt-* —
@@ -38,50 +30,36 @@ fi
 
 TAG="log-labor-${VERSION}"
 TGZ="log-labor_${VERSION}_${OS}_${ARCH}.tar.gz"
-URL="$BASE_URL/releases/download/$TAG/$TGZ"
+URL="$RELEASES/download/$TAG/$TGZ"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 # gzip magic (1f8b) check; xxd is absent from some minimal Git Bash installs.
 is_gzip() { head -c2 "$1" | od -An -tx1 | tr -d ' \n' | grep -q '^1f8b'; }
 
-echo "install.sh: looking for a source to build…"
+echo "install.sh: looking for a source…"
 SRC=""
 HERE="$(cd "$(dirname "$0")" && pwd)"
-if [ -f "$HERE/go.mod" ]; then
+# Local-checkout rung: only when this script really lives in the repo —
+# a piped `curl | sh` has no $0 file and must not build whatever Go
+# project happens to be in the caller's working directory.
+if [ -f "$HERE/go.mod" ] && [ -d "$HERE/cmd/log-labor" ]; then
   echo "install.sh: building from the local checkout at $HERE"
-  command -v go >/dev/null || { echo "install.sh: FATAL — go not found; install go or use a release tarball" >&2; exit 1; }
+  command -v go >/dev/null || { echo "install.sh: FATAL — go not found; install go, or run the one-liner outside a checkout to fetch a release binary" >&2; exit 1; }
   ( cd "$HERE" && go build -o "$TMP/log-labor$EXE" ./cmd/log-labor )
   SRC="$TMP/log-labor$EXE"
 fi
 if [ -z "$SRC" ]; then
-  echo "install.sh: no local checkout — trying release $TAG ($OS/$ARCH)…"
+  echo "install.sh: downloading release $TAG ($OS/$ARCH)…"
   if curl -fsSL -m 60 -o "$TMP/$TGZ" "$URL" && is_gzip "$TMP/$TGZ"; then
     tar -xzf "$TMP/$TGZ" -C "$TMP" && SRC="$TMP/log-labor$EXE"
   fi
 fi
 if [ -z "$SRC" ]; then
-  echo "install.sh: no usable release tarball — trying the GitHub mirror tarball…"
-  GH_TARBALL="${LOG_LABOR_GITHUB_TARBALL:-https://codeload.github.com/yyx462/AutoWecom-plugin/tar.gz/refs/heads/$REF}"
-  if curl -fsSL -m 90 -o "$TMP/gh.tgz" "$GH_TARBALL" && is_gzip "$TMP/gh.tgz"; then
-    if tar -xzf "$TMP/gh.tgz" -C "$TMP"; then
-      d="$(find "$TMP" -maxdepth 1 -type d -name 'AutoWecom-plugin-*' | head -1)"
-      if [ -n "$d" ]; then
-        command -v go >/dev/null || { echo "install.sh: FATAL — go not found; the GitHub mirror ships source only" >&2; exit 1; }
-        ( cd "$d/log-labor" && go build -o "$TMP/log-labor$EXE" ./cmd/log-labor )
-        SRC="$TMP/log-labor$EXE"
-      fi
-    fi
-  fi
-fi
-if [ -z "$SRC" ]; then
-  echo "install.sh: no GitHub mirror either — trying a source build from ${REF}…"
-  git clone --depth 1 --branch "$REF" "$BASE_URL.git" "$TMP/src" 2>/dev/null \
-    || git clone --depth 1 --branch "$REF" "$BASE_URL" "$TMP/src" 2>/dev/null \
-    || { echo "install.sh: FATAL — no release and no git access to $BASE_URL" >&2; exit 1; }
-  command -v go >/dev/null || { echo "install.sh: FATAL — go not found; install go or ask for a release tarball" >&2; exit 1; }
-  ( cd "$TMP/src/log-labor" && go build -o "$TMP/log-labor$EXE" ./cmd/log-labor )
-  SRC="$TMP/log-labor$EXE"
+  echo "install.sh: FATAL — no prebuilt binary for $OS/$ARCH:" >&2
+  echo "  $URL" >&2
+  echo "  check $RELEASES for published tags (or install go and run from a checkout)" >&2
+  exit 1
 fi
 
 mkdir -p "$BIN_DIR"

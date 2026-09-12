@@ -104,12 +104,11 @@ day the user says they worked, say so and ask.
 ## Onboarding a coworker (张三)
 
 ```bash
-git clone https://git.sh.nint.com/ying.yuxiang/AutoWecom-plugin
-./AutoWecom-plugin/log-labor/install.sh   # builds from the clone
+curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
 log-labor init            # key + corp id (zhang.san form) + sheet name
 log-labor doctor --write-sample   # one marked row proves the pipeline
 log-labor skill install   # this skill, for every agent on the machine
 ```
 
-If `log-labor` is missing: build from source (`cd log-labor && go build
-./cmd/log-labor`) or point the coworker at the repo README.
+If `log-labor` is missing: re-run the one-liner (fetches the release
+binary) or build from source (`cd log-labor && go build ./cmd/log-labor`).
