@@ -1,11 +1,15 @@
-# release.yml — on tag log-labor-vX.Y.Z: cross-build the 5 release
-# binaries and attach the tarballs to the GitHub Release. This is what
-# makes install.sh's public one-liner work (it downloads exactly these
-# tarballs by name: log-labor_${VERSION}_${OS}_${ARCH}.tar.gz).
+# release.yml — on tag log-labor-vX.Y.Z:
+#   1. npm/build.sh cross-builds the 5 binaries, tars them (GitHub
+#      Release assets — names must byte-match install.sh/install.ps1)
+#      and assembles the 6 npm packages (wrapper + 5 platforms).
+#   2. publishes the GitHub Release via the built-in GITHUB_TOKEN
+#      (contents:write) — this is what makes the curl/PowerShell
+#      one-liners work.
+#   3. publishes the npm packages IF the NPM_TOKEN secret exists
+#      (skips loudly otherwise — Release binaries still ship).
 #
-# No secrets needed: the runner's built-in GITHUB_TOKEN (contents:write)
-# publishes the release. Publishing = pushing a tag; delete/re-push the
-# tag to re-run.
+# Publishing a release = pushing a tag. Delete + re-push the tag to
+# re-run (delete the Release first if it exists).
 name: release
 
 on:
@@ -28,20 +32,15 @@ jobs:
         with:
           go-version: stable
 
-      - name: cross-build + package
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: build + package + assemble npm
         run: |
           VERSION="${GITHUB_REF_NAME#log-labor-}"
-          LDFLAGS="-X git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config.Version=${VERSION}"
-          mkdir -p dist
-          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do
-            os="${target%/*}"; arch="${target#*/}"
-            exe="log-labor"; [ "$os" = "windows" ] && exe="log-labor.exe"
-            echo "building ${os}/${arch}…"
-            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "dist/$exe" ./cmd/log-labor
-            tar -czf "dist/log-labor_${VERSION}_${os}_${arch}.tar.gz" -C dist "$exe"
-            rm "dist/$exe"
-          done
-          ls -la dist
+          npm/build.sh "$VERSION"
 
       - name: publish GitHub Release
         env:
@@ -51,3 +50,23 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/*.tar.gz \
             --title "log-labor ${VERSION}" \
             --generate-notes
+
+      - name: publish npm packages (needs NPM_TOKEN secret)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "npm: NPM_TOKEN secret not set — skipping npm publish."
+            echo "npm: Release binaries above are live. To light up 'npm i -g log-labor':"
+            echo "npm:   create an npm account, npm login once, then either"
+            echo "npm:   add NPM_TOKEN to this repo's secrets and delete/re-push this tag, or"
+            echo "npm:   run log-labor/npm/publish.sh locally from a checkout."
+            exit 0
+          fi
+          cd dist/npm
+          for pkg in log-labor-*; do
+            echo "npm publish: $pkg"
+            ( cd "$pkg" && npm publish --access public )
+          done
+          echo "npm publish: log-labor (wrapper — last by design)"
+          ( cd log-labor && npm publish --access public )
