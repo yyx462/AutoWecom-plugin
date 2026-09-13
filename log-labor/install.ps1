@@ -15,7 +15,7 @@ $ErrorActionPreference = 'Stop'
 # Windows PowerShell 5.1 defaults may not include TLS 1.2.
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
-$Version = if ($env:LOG_LABOR_VERSION) { $env:LOG_LABOR_VERSION } else { 'v0.1.2' }
+$Version = if ($env:LOG_LABOR_VERSION) { $env:LOG_LABOR_VERSION } else { 'v0.1.3' }
 # win32-x64 is the only prebuilt target; it also runs on ARM64 Windows
 # via x64 emulation.
 $Arch = 'amd64'

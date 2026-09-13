@@ -10,7 +10,7 @@
 # needs `go`. Never touches credentials — `log-labor init` does that.
 set -euo pipefail
 
-VERSION="${LOG_LABOR_VERSION:-v0.1.2}"
+VERSION="${LOG_LABOR_VERSION:-v0.1.3}"
 BIN_DIR="${LOG_LABOR_BIN_DIR:-$HOME/.local/bin}"
 RELEASES="https://github.com/yyx462/AutoWecom-plugin/releases"
 
