@@ -11,8 +11,9 @@
 #   npm/platforms/<npm-os>-<npm-cpu>/        @yyx462/* platform packages
 #
 # Name contract: the tarball names must byte-match what install.sh and
-# install.ps1 compute; the npm platform packages live under the
-# @yyx462 org scope (@esbuild / @openai convention — unscoped
+# install.ps1 compute; the npm packages live under the @yyx462 scope,
+# wrapper included (@anthropic-ai/claude-code pattern — the installed
+# command is still plain `log-labor` via the bin field; unscoped
 # hyphenated names trip npm's spam detection, see log-labor-win32-x64
 # 2026-09-13). npm version = <version> minus the leading v.
 set -euo pipefail

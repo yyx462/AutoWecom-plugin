@@ -1,11 +1,12 @@
 {
-  "name": "log-labor",
+  "name": "@yyx462/log-labor",
   "version": "@VERSION@",
   "description": "报工 CLI — log labor into the WeCom 任务工时详细 smartsheet via its WeDoc webhook (npm wrapper; the Go CLI ships as per-platform optionalDependencies)",
   "bin": { "log-labor": "bin/log-labor.js" },
   "files": ["bin", "README.md"],
   "keywords": ["wecom", "labor", "timesheet", "smartsheet", "agent", "skill", "log-labor"],
   "engines": { "node": ">=18" },
+  "publishConfig": { "access": "public" },
   "optionalDependencies": {
     "@yyx462/win32-x64": "@VERSION@",
     "@yyx462/darwin-x64": "@VERSION@",

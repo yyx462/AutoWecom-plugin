@@ -22,9 +22,9 @@ curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-
 #   PATH via Windows Settings > Environment Variables (the installer
 #   prints the one-liner). Git Bash users can use the curl line above.
 
-# npm / npx (same binary, no curl-pipe-sh): npm i -g log-labor
-#   — publishing is one npm-account + NPM_TOKEN away; until then the
-#   one-liners above are the install path
+# npm / npx (same binary, no curl-pipe-sh): npm i -g @yyx462/log-labor
+#   → installs the `log-labor` command (package name and command name
+#   are decoupled, like @anthropic-ai/claude-code → claude)
 
 # 2. configure — wizard asks for the sheet webhook key + your corp id
 log-labor init
