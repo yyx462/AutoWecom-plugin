@@ -13,7 +13,7 @@ description: >-
 ## Commands
 
 ```bash
-log-labor add -c "完成登录页联调" -h 3                  # today, 默认状态 进行中
+log-labor add -c "完成登录页联调" -h 3                  # today, 默认状态 进行中 (或表内首个状态)
 log-labor add -c "修复导出崩溃" -h 2 --status 已完成 --due 2026-09-20 --blocker "无"
 log-labor update --record-id R --status 已完成          # closure = UPDATE, never a new row
 log-labor doctor                                       # config + key health, no writes
@@ -40,6 +40,11 @@ default today +08) · `--status` ({{STATUSES}}) · `--person` (corp id)
 
 - Sheet: **{{SHEET}}**; keys are WRITE credentials — never print the key,
   never commit it (`~/.config/log-labor/config.json`, 0600).
+- The profile (field ids + statuses) comes from the sheet's 接收外部数据
+  示例数据 (智能表格 → 右上角文档操作 → 接收外部数据) via
+  `log-labor profile import` — the console sample is ground truth; never
+  hand-edit field ids in config.json. Roles the sheet doesn't map simply
+  disable their flags.
 - 人员 takes the CORP userid (`{{PERSON_EXAMPLE}}` pinyin form). `woa-…`
   bot-namespace ids and numeric ids are rejected **atomically** (40031) —
   a bad user value kills the whole request, nothing is written.
@@ -107,6 +112,8 @@ day the user says they worked, say so and ask.
 curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
 # Windows PowerShell: irm https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.ps1 | iex
 log-labor init            # key + corp id (zhang.san form) + sheet name
+# ONLY when the sheet differs from the team default (other fields/statuses):
+log-labor profile import  # paste 接收外部数据 → 示例数据, re-derives the profile
 log-labor doctor --write-sample   # one marked row proves the pipeline
 log-labor skill install   # this skill, for every agent on the machine
 ```

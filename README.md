@@ -36,9 +36,15 @@ npm rm -g log-labor && npm i -g @yyx462/log-labor
 
 ```bash
 # configure — wizard asks for the sheet webhook key + your corp id
+#   (key lives at 智能表格 → 右上角文档操作 → 接收外部数据 → Webhook 地址 —
+#    pasting the whole URL works too)
 log-labor init
 #   ? Webhook key / ? 你的企业userid (zhang.san) / ? Sheet name [任务工时详细]
 #   → ~/.config/log-labor/config.json (0600; Windows: %AppData%\log-labor)
+
+# different sheet (fields/statuses differ)? paste its 示例数据 and the
+#   profile re-derives itself — 智能表格 → 右上角文档操作 → 接收外部数据 → 示例数据
+log-labor profile import            # interactive paste; or: profile import <sample.json>
 
 # prove the pipeline — one clearly-marked sample row, asks first
 log-labor doctor --write-sample
@@ -81,8 +87,9 @@ unset optionals are omitted from the row, never written empty. Exit codes:
 
 ## Get the webhook key
 
-The sheet owner enables 接收外部数据 on the sheet (智能表格 → 更多 →
-接收外部数据) and shares the key with you. The key is a write credential
+The sheet owner enables 接收外部数据 on the sheet (智能表格 → 右上角文档操作
+→ 接收外部数据) and shares the Webhook 地址 with you — `init` accepts the
+key or the whole URL. The key is a write credential
 for that one sheet — treat it like a token; the owner can rotate it in the
 console and you update with `log-labor config set key <new>`.
 
@@ -91,8 +98,10 @@ console and you update with `log-labor config set key <new>`.
 `~/.config/log-labor/config.json` (0600): `key`, `person` (corp id, e.g.
 `zhang.san`), `endpoint`, and the sheet `profile` (name + field-id map +
 status enum). The default profile targets the team labor sheet; point the
-CLI at a different sheet by editing the profile or `log-labor config set
-sheet <name>` after swapping the field ids.
+CLI at a different sheet with `log-labor profile import` — paste that
+sheet's 接收外部数据 示例数据 and the field map + statuses re-derive
+(`--map role=id` fixes any mis-guessed column; unmapped roles just
+disable their flags). `config set sheet <name>` renames only.
 
 ## For agents
 

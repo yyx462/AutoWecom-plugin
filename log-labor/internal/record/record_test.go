@@ -99,6 +99,30 @@ func TestBuildValues_DefaultsOnlyInAddMode(t *testing.T) {
 	}
 }
 
+func TestBuildValues_PartialProfile(t *testing.T) {
+	// profile import can leave roles unmapped; set-but-unmapped must be a
+	// loud error, unset must be skipped — never a write under field id ""
+	p := testProfile()
+	p.Fields = map[string]config.Field{
+		"content": p.Fields["content"],
+		"hours":   p.Fields["hours"],
+	}
+	p.FieldOrder = []string{"content", "hours"}
+	v, err := BuildValues(p, Options{Content: "x", Hours: "1"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v) != 2 {
+		t.Fatalf("partial profile must write only mapped fields (no date/status defaults), got %#v", v)
+	}
+	if _, err := BuildValues(p, Options{Status: "已完成"}, false); err == nil || !strings.Contains(err.Error(), "maps no status") {
+		t.Fatalf("set-but-unmapped status must error, got %v", err)
+	}
+	if _, err := BuildValues(p, Options{Person: "zhang.san"}, false); err == nil || !strings.Contains(err.Error(), "maps no person") {
+		t.Fatalf("set-but-unmapped person must error, got %v", err)
+	}
+}
+
 func TestPreviewCJKAlignment(t *testing.T) {
 	p := testProfile()
 	p.FieldOrder = []string{"person", "date", "status", "content", "hours", "blocker"}
