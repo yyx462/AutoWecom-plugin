@@ -105,6 +105,7 @@ day the user says they worked, say so and ask.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
+# Windows PowerShell: irm https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.ps1 | iex
 log-labor init            # key + corp id (zhang.san form) + sheet name
 log-labor doctor --write-sample   # one marked row proves the pipeline
 log-labor skill install   # this skill, for every agent on the machine

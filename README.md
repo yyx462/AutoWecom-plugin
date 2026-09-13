@@ -12,15 +12,19 @@ and how to call the CLI.
 
 ```bash
 # 1. install — one-liner, no toolchain: fetches the prebuilt binary for
-#    your OS/arch from GitHub Releases (npm/npx packages are planned:
-#    `npm i -g log-labor`)
+#    your OS/arch from GitHub Releases
 curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
 #   → installs to ~/.local/bin/log-labor
 
-# Windows: run the same line inside Git Bash (https://git-scm.com) —
-# the installer detects MSYS/MINGW, fetches log-labor.exe, and installs
-# to %USERPROFILE%\.local\bin. Add that dir to PATH (~/.bashrc for
-# bash, or Windows Settings > Environment Variables for cmd/PowerShell).
+# Windows PowerShell (no Git Bash, no curl|sh needed):
+#   irm https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.ps1 | iex
+#   → installs to %USERPROFILE%\.local\bin\log-labor.exe; add that dir to
+#   PATH via Windows Settings > Environment Variables (the installer
+#   prints the one-liner). Git Bash users can use the curl line above.
+
+# npm / npx (same binary, no curl-pipe-sh): npm i -g log-labor
+#   — publishing is one npm-account + NPM_TOKEN away; until then the
+#   one-liners above are the install path
 
 # 2. configure — wizard asks for the sheet webhook key + your corp id
 log-labor init

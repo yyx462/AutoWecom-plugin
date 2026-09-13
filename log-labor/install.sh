@@ -3,12 +3,14 @@
 #
 # Public one-liner (downloads a prebuilt release binary, no toolchain):
 #   curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
+# Native Windows (PowerShell, no Git Bash needed):
+#   irm https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.ps1 | iex
 #
 # Run from inside a checkout (developers): builds from that source,
 # needs `go`. Never touches credentials — `log-labor init` does that.
 set -euo pipefail
 
-VERSION="${LOG_LABOR_VERSION:-v0.1.0}"
+VERSION="${LOG_LABOR_VERSION:-v0.1.1}"
 BIN_DIR="${LOG_LABOR_BIN_DIR:-$HOME/.local/bin}"
 RELEASES="https://github.com/yyx462/AutoWecom-plugin/releases"
 
