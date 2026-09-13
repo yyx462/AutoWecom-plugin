@@ -68,6 +68,32 @@ What your agent is trained to do (from the skill):
 4. **Close, don't duplicate.** Rework/closure is `update --record-id`,
    never a second row.
 
+## End-of-day: 总结今天 (daily batch)
+
+Ran agent sessions all day? Close out in one line — the skill digests
+the day's sessions into 2–6 records scaled to one working day:
+
+```text
+你: 帮我总结今天并报工
+agent: log-labor daily collect        # today's sessions, every source
+       drafts records per theme → log-labor daily fit → shows the
+       fitted table (Σ = 8.0h) → you OK it → one log-labor add per record
+```
+
+Overtime days have their own cap — say the number and the agent fits to
+it instead of 8 ("help me log today to 10 hours"):
+
+```text
+你: 今天加班了,帮我把今天报成 10 小时
+agent: same flow, but `log-labor daily fit --total 10` — Σ = 10.0h exactly
+```
+
+`--total` accepts `10`, `10h`, `10小时`; default `8`. Correcting hours
+after insert: `log-labor update --record-id R -h <new>` works while R
+is still known from the add output — the webhook is write-only (no
+read, no delete), so rows you can't reference anymore are edited by
+hand in the WeCom sheet UI.
+
 ## The CLI, without an agent
 
 ```bash

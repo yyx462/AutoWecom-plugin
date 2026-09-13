@@ -50,12 +50,20 @@ log-labor doctor                                          # config + key health 
 log-labor skill upgrade                                   # refresh installed skills after CLI updates
 ```
 
-End-of-day batch from parallel agent sessions (Σ lands on exactly 8h):
+End-of-day batch from parallel agent sessions (Σ lands on exactly the
+day's total — 8h by default):
 
 ```bash
 log-labor daily collect                     # today's sessions: project, span, msgs
 log-labor daily fit "联调"=3.2 "修DAG"=2.7   # scales+snaps to Σ=8.0, prints add lines
+log-labor daily fit "联调"=4 "修DAG"=6 --total 10h   # user-set cap: "报今天的工,按 10 小时"
 ```
+
+`--total` accepts `10`, `10h`, `10小时` and defaults to 8 — the user
+names the cap in plain language, the agent passes the flag. Fixing a
+logged row later: `log-labor update --record-id R -h <new>` while R is
+still known from the add output (the webhook is write-only — no read,
+no delete); anything older is edited by hand in the sheet UI.
 
 Collect scans every source it knows: built-ins (opencode, Claude Code,
 Codex) auto-detect, and any other agent harness registers itself via

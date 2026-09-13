@@ -51,24 +51,34 @@ default today +08) · `--status` ({{STATUSES}}) · `--person` (corp id)
   ms-epoch STRING (00:00 +08) · single_select = option text · user =
   corp id · link = record ids.
 
-## End-of-day batch (sum to 8h)
+## End-of-day batch (Σ = 8h default, any --total)
 
 When the user asks to 总结今天 / 报工总结 / close out the day — or runs
-parallel agent sessions all day and reports at once:
+parallel agent sessions all day and reports at once — or asks "help me
+log today to 10 hours" (帮我把今天报成 10 小时):
 
 1. `log-labor daily collect [--date YYYY-MM-DD]` — digest of that day's
    agent sessions: project, time span, message count, title.
 2. Draft 2–6 records grouping the digest into real work themes with
    HONEST raw hours; ask the user when the digest is ambiguous. Never
    invent work that is not in the digest (or that the user rejects).
-3. Fit them to one working day — pipe a JSON array to
+3. Fit them to the day's total — pipe a JSON array to
    `log-labor daily fit --date <day>`:
    `echo '[{"content":"…","hours":2.5},…]' | log-labor daily fit --date 2026-09-11`
    (or bare args: `log-labor daily fit "内容"=2.5 …`). The fit scales
-   proportions, snaps to 0.5h, and lands Σ on EXACTLY 8.0h; it prints
-   the fitted table plus ready `log-labor add` lines (with `--date`).
+   proportions, snaps to 0.5h, and lands Σ on EXACTLY the total; it
+   prints the fitted table plus ready `log-labor add` lines (with
+   `--date`). Total = 8.0h unless the user set the day's cap:
+   `--total 10` (accepts 10 / 10h / 10小时) — "log today to 10 hours"
+   is collect → draft → `daily fit --total 10` → add, nothing else.
 4. Show the fitted table to the user; after OK, run each add line.
    Cite which digest session each record came from.
+
+Hours corrections after insert: the webhook only WRITES — no read, no
+delete. `log-labor update --record-id R -h <h>` fixes a row while R is
+still known from its add output; without R the user edits the row by
+hand in the sheet UI. Mention this ONLY when the user asks to change
+an already-logged row — never repeat it on every 报工.
 
 ## Session sources — setup for any agent
 
