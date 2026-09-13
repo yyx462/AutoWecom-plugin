@@ -19,6 +19,19 @@ curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-
 # Windows PowerShell:  irm https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.ps1 | iex
 ```
 
+## Troubleshooting
+
+**`npm error EEXIST ... log-labor.ps1` (or `log-labor`, `log-labor.cmd`)
+on install** — the pre-rename unscoped `log-labor` package (since renamed
+to `@yyx462/log-labor`) is still installed, and npm refuses to overwrite
+its shims. Remove it once and reinstall:
+
+```bash
+npm rm -g log-labor && npm i -g @yyx462/log-labor
+```
+
+(`npm rm -g log-labor` is a harmless no-op when it isn't installed.)
+
 ## Init
 
 ```bash

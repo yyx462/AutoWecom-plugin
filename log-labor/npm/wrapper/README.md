@@ -19,6 +19,17 @@ log-labor doctor          # verify
 log-labor skill install   # give your agents the skill
 ```
 
+## Upgrading from the old unscoped `log-labor` package
+
+`npm i -g @yyx462/log-labor` fails with `EEXIST` (`log-labor`,
+`log-labor.cmd` or `log-labor.ps1` already exists) when the pre-rename
+unscoped package is still installed — npm refuses to overwrite its
+shims. Remove it once, then install:
+
+```bash
+npm rm -g log-labor && npm i -g @yyx462/log-labor
+```
+
 No Node? Install straight from GitHub Releases instead:
 
 ```bash
