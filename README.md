@@ -8,43 +8,36 @@ and how to call the CLI.
     张三$ log-labor add -c "完成登录页联调" -h 3 --status 进行中
     ok  add record_id=rAbC12  sheet=任务工时详细
 
-## Install (张三's walkthrough)
+## Install
 
 ```bash
-# 1. install — one-liner, no toolchain: fetches the prebuilt binary for
-#    your OS/arch from GitHub Releases
+# 1. npm (agent users — Node already on the machine)
+npm i -g @yyx462/log-labor      # installs the `log-labor` command
+
+# 2. curl — no Node, no toolchain; prebuilt binary from GitHub Releases
 curl -fsSL https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.sh | sh
-#   → installs to ~/.local/bin/log-labor
+# Windows PowerShell:  irm https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.ps1 | iex
+```
 
-# Windows PowerShell (no Git Bash, no curl|sh needed):
-#   irm https://raw.githubusercontent.com/yyx462/AutoWecom-plugin/master/log-labor/install.ps1 | iex
-#   → installs to %USERPROFILE%\.local\bin\log-labor.exe; add that dir to
-#   PATH via Windows Settings > Environment Variables (the installer
-#   prints the one-liner). Git Bash users can use the curl line above.
+## Init
 
-# npm / npx (same binary, no curl-pipe-sh): npm i -g @yyx462/log-labor
-#   → installs the `log-labor` command (package name and command name
-#   are decoupled, like @anthropic-ai/claude-code → claude)
-
-# 2. configure — wizard asks for the sheet webhook key + your corp id
+```bash
+# configure — wizard asks for the sheet webhook key + your corp id
 log-labor init
-#   ? Webhook key: nkVN…********************************…X9z
-#   ? 你的企业userid (corp id): zhang.san
-#   ? Sheet name [任务工时详细]: ⏎
-#   config written to ~/.config/log-labor/config.json (0600)
-#   (Windows/Git Bash: %AppData%\log-labor\config.json)
+#   ? Webhook key / ? 你的企业userid (zhang.san) / ? Sheet name [任务工时详细]
+#   → ~/.config/log-labor/config.json (0600; Windows: %AppData%\log-labor)
 
-# 3. prove the pipeline with one clearly-marked sample row (asks first)
+# prove the pipeline — one clearly-marked sample row, asks first
 log-labor doctor --write-sample
-#   you will insert 1 row into sheet 任务工时详细:
-#   | 人员       | 日期        | 状态   | 需求内容                        | 预计花费工时 | 提出人 | 卡点 |
-#   | zhang.san | 2026年9月11日 | 已完成 | [skill验证] 测试（可删除） | 0.5         | 张三   | 无   |
-#   proceed? [y/N] y
-#   ok add record_id=rXyZ98 — delete this row in the sheet UI when done
 
-# 4. give your agent the skill (detects Claude Code / opencode / Codex /
-#    Cursor / Trae / AGENTS.md; --all forces everything)
+# give your agent the skill (Claude Code / opencode / Codex / Cursor /
+# Trae / AGENTS.md; --all forces everything)
 log-labor skill install
+
+# 3rd-party agents: self-register their session store for daily collect
+#   (opencode / Claude Code / Codex are built-in, no registration)
+log-labor daily sources add --name <harness> --format jsonl-claude --path <dir>
+log-labor daily sources test --name <harness>     # verify before trusting
 ```
 
 ## Daily use
