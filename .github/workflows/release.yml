@@ -11,8 +11,10 @@
 #      - otherwise → trusted publishing (OIDC, no token — the workflow
 #        itself is the credential; requires registration on npmjs.com
 #        per package, npm's replacement for publish tokens which die
-#        2027-01). Failures here are loud but non-fatal: Release
-#        binaries are already live.
+#        2027-01). Any failed publish fails the job: a green run with
+#        npm lagging behind shipped linux-arm64-less 0.1.3 once
+#        (2026-09-14) and broke fresh installs — the wrapper pins exact
+#        versions of its optionalDependencies.
 #
 # Publishing a release = pushing a tag. Delete + re-push the tag to
 # re-run (delete the Release first if it exists).
@@ -62,28 +64,30 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          publish_all() {
-            cd dist/npm/platforms
-            for pkg in *; do
-              echo "npm publish: @yyx462/$pkg"
-              ( cd "$pkg" && npm publish --access public $1 )
-            done
-            echo "npm publish: @yyx462/log-labor (wrapper — last by design)"
-            ( cd ../wrapper && npm publish --access public $1 )
-          }
-          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
-            publish_all ""
-            exit 0
+          ARGS=""
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "npm: NPM_TOKEN not set — using trusted publishing (OIDC, no token)…"
+            ARGS="--provenance"
           fi
-          echo "npm: NPM_TOKEN not set — attempting trusted publishing (OIDC, no token)…"
-          if publish_all "--provenance"; then
-            echo "npm: trusted publish OK"
-          else
-            echo "npm: trusted publishing did not complete (normal until registered)."
-            echo "npm: register this workflow as a Trusted Publisher per package on npmjs.com"
-            echo "npm: (@yyx462/log-labor + @yyx462/* platforms → Settings → Trusted Publisher:"
-            echo "npm:  repository yyx462/AutoWecom-plugin, workflow release.yml),"
-            echo "npm: or set an NPM_TOKEN secret (stage-only is fine — approve on the website),"
-            echo "npm: or publish locally: log-labor/npm/publish.sh (browser 2FA)."
-            echo "npm: GitHub Release binaries above are live either way."
+          fails=0
+          cd dist/npm/platforms
+          for pkg in *; do
+            echo "npm publish: @yyx462/$pkg"
+            if ! ( cd "$pkg" && npm publish --access public $ARGS ); then
+              echo "npm publish FAILED: @yyx462/$pkg" >&2
+              fails=$((fails+1))
+            fi
+          done
+          echo "npm publish: @yyx462/log-labor (wrapper — last by design)"
+          if ! ( cd ../wrapper && npm publish --access public $ARGS ); then
+            echo "npm publish FAILED: @yyx462/log-labor" >&2
+            fails=$((fails+1))
           fi
+          if [ "$fails" -gt 0 ]; then
+            echo "npm: $fails publish FAILED — the GitHub Release binaries above are live," >&2
+            echo "npm: but npm lags behind and the wrapper pins exact platform versions," >&2
+            echo "npm: so fresh installs break. Fix (trusted-publisher registration or" >&2
+            echo "npm: NPM_TOKEN), then re-release: delete tag + Release, re-push tag." >&2
+            exit 1
+          fi
+          echo "npm: all 6 packages published"
