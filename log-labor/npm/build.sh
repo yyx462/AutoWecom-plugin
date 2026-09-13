@@ -8,11 +8,11 @@
 # Outputs under dist/:
 #   log-labor_<version>_<os>_<arch>.tar.gz   ×5 — GitHub Release assets
 #   npm/wrapper/                   wrapper package (launcher + package.json)
-#   npm/platforms/<npm-os>-<npm-cpu>/        @log-labor/* platform packages
+#   npm/platforms/<npm-os>-<npm-cpu>/        @yyx462/* platform packages
 #
 # Name contract: the tarball names must byte-match what install.sh and
 # install.ps1 compute; the npm platform packages live under the
-# @log-labor org scope (@esbuild / @openai convention — unscoped
+# @yyx462 org scope (@esbuild / @openai convention — unscoped
 # hyphenated names trip npm's spam detection, see log-labor-win32-x64
 # 2026-09-13). npm version = <version> minus the leading v.
 set -euo pipefail
@@ -23,7 +23,7 @@ cd "$ROOT"
 VERSION="${1:?usage: npm/build.sh <version> (e.g. v0.1.1)}"
 case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
 NPMV="${VERSION#v}"
-SCOPE="@log-labor"
+SCOPE="@yyx462"
 LDFLAGS="-X git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config.Version=${VERSION}"
 
 rm -rf dist

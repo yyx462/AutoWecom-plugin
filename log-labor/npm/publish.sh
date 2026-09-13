@@ -24,7 +24,7 @@ fi
 "$HERE/build.sh" "$VERSION"
 cd "$HERE/../dist/npm/platforms"
 for pkg in *; do
-  echo "npm/publish: @log-labor/$pkg"
+  echo "npm/publish: @yyx462/$pkg"
   ( cd "$pkg" && npm publish --access public )
 done
 echo "npm/publish: log-labor (wrapper — last by design)"
