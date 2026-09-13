@@ -63,13 +63,13 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           publish_all() {
-            cd dist/npm
-            for pkg in log-labor-*; do
-              echo "npm publish: $pkg"
+            cd dist/npm/platforms
+            for pkg in *; do
+              echo "npm publish: @log-labor/$pkg"
               ( cd "$pkg" && npm publish --access public $1 )
             done
             echo "npm publish: log-labor (wrapper — last by design)"
-            ( cd log-labor && npm publish --access public $1 )
+            ( cd ../wrapper && npm publish --access public $1 )
           }
           if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
             publish_all ""
@@ -81,7 +81,7 @@ jobs:
           else
             echo "npm: trusted publishing did not complete (normal until registered)."
             echo "npm: register this workflow as a Trusted Publisher per package on npmjs.com"
-            echo "npm: (log-labor + 5 platform pkgs → Settings → Trusted Publisher:"
+            echo "npm: (log-labor + @log-labor/* platforms → Settings → Trusted Publisher:"
             echo "npm:  repository yyx462/AutoWecom-plugin, workflow release.yml),"
             echo "npm: or set an NPM_TOKEN secret (stage-only is fine — approve on the website),"
             echo "npm: or publish locally: log-labor/npm/publish.sh (browser 2FA)."

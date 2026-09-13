@@ -22,11 +22,11 @@ fi
 [ -n "$VERSION" ] || { echo "npm/publish: FATAL — no version arg and no log-labor-v* tag reachable" >&2; exit 1; }
 
 "$HERE/build.sh" "$VERSION"
-cd "$HERE/../dist/npm"
-for pkg in log-labor-*; do
-  echo "npm/publish: $pkg"
+cd "$HERE/../dist/npm/platforms"
+for pkg in *; do
+  echo "npm/publish: @log-labor/$pkg"
   ( cd "$pkg" && npm publish --access public )
 done
 echo "npm/publish: log-labor (wrapper — last by design)"
-( cd log-labor && npm publish --access public )
+( cd ../wrapper && npm publish --access public )
 echo "npm/publish: done — https://www.npmjs.com/package/log-labor"

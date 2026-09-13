@@ -7,12 +7,14 @@
 #
 # Outputs under dist/:
 #   log-labor_<version>_<os>_<arch>.tar.gz   ×5 — GitHub Release assets
-#   npm/log-labor/                wrapper package (launcher + package.json)
-#   npm/log-labor-<npm-os>-<npm-cpu>/        platform packages (one binary)
+#   npm/wrapper/                   wrapper package (launcher + package.json)
+#   npm/platforms/<npm-os>-<npm-cpu>/        @log-labor/* platform packages
 #
 # Name contract: the tarball names must byte-match what install.sh and
-# install.ps1 compute; the npm names use process.platform/process.arch
-# spelling (win32/x64). npm version = <version> minus the leading v.
+# install.ps1 compute; the npm platform packages live under the
+# @log-labor org scope (@esbuild / @openai convention — unscoped
+# hyphenated names trip npm's spam detection, see log-labor-win32-x64
+# 2026-09-13). npm version = <version> minus the leading v.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NPM_SRC="$ROOT/npm"
@@ -21,10 +23,11 @@ cd "$ROOT"
 VERSION="${1:?usage: npm/build.sh <version> (e.g. v0.1.1)}"
 case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
 NPMV="${VERSION#v}"
+SCOPE="@log-labor"
 LDFLAGS="-X git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config.Version=${VERSION}"
 
 rm -rf dist
-mkdir -p dist/stage dist/npm
+mkdir -p dist/stage dist/npm/platforms
 
 for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do
   os="${target%/*}"; arch="${target#*/}"
@@ -37,23 +40,24 @@ for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; d
   # must match process.platform / process.arch exactly).
   nos="$os";  [ "$os"   = "windows" ] && nos="win32"
   narch="$arch"; [ "$arch" = "amd64" ] && narch="x64"
-  pkg="dist/npm/log-labor-${nos}-${narch}"
+  pkg="dist/npm/platforms/${nos}-${narch}"
   mkdir -p "$pkg"
   cp "dist/stage/$exe" "$pkg/$exe"
   cat > "$pkg/package.json" <<EOF
 {
-  "name": "log-labor-${nos}-${narch}",
+  "name": "${SCOPE}/${nos}-${narch}",
   "version": "${NPMV}",
   "description": "log-labor binary for ${os}/${arch} — installed via the log-labor wrapper's optionalDependencies",
   "os": ["${nos}"],
   "cpu": ["${narch}"],
-  "files": ["${exe}"]
+  "files": ["${exe}"],
+  "publishConfig": { "access": "public" }
 }
 EOF
   rm "dist/stage/$exe"
 done
 
-pkg="dist/npm/log-labor"
+pkg="dist/npm/wrapper"
 mkdir -p "$pkg/bin"
 cp "$NPM_SRC/wrapper/bin/log-labor.js" "$pkg/bin/log-labor.js"
 cp "$NPM_SRC/wrapper/README.md" "$pkg/README.md"
@@ -61,4 +65,5 @@ sed -e "s/@VERSION@/${NPMV}/g" "$NPM_SRC/wrapper/package.json.tmpl" > "$pkg/pack
 
 echo "npm/build: tarballs + packages ready:"
 ls dist/*.tar.gz
-ls dist/npm
+ls dist/npm/platforms
+ls dist/npm/wrapper
