@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # npm/publish.sh — local publish helper for the six log-labor packages.
-# The CI path needs an NPM_TOKEN secret; this one rides your `npm login`
-# instead. Platform packages publish first, wrapper LAST (avoids a
-# window where the wrapper is live but its optional deps aren't).
+# Rides your `npm login`; npm enforces 2FA per package, so expect one
+# browser approval per package (up to 6 passkey taps). CI-side,
+# release.yml prefers trusted publishing (OIDC, zero taps, zero tokens)
+# once the workflow is registered on npmjs.com — this script is the
+# bootstrap and the fallback. Platform packages publish first, wrapper
+# LAST (avoids a window where the wrapper is live but its optional
+# deps aren't).
 #
 #   Usage: npm/publish.sh [version]   # default: latest log-labor-v* tag
 set -euo pipefail

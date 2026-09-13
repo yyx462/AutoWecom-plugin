@@ -5,8 +5,14 @@
 #   2. publishes the GitHub Release via the built-in GITHUB_TOKEN
 #      (contents:write) — this is what makes the curl/PowerShell
 #      one-liners work.
-#   3. publishes the npm packages IF the NPM_TOKEN secret exists
-#      (skips loudly otherwise — Release binaries still ship).
+#   3. publishes the npm packages:
+#      - NPM_TOKEN secret set → classic/granular token publish (a
+#        stage-only token stages; approve the version on npmjs.com);
+#      - otherwise → trusted publishing (OIDC, no token — the workflow
+#        itself is the credential; requires registration on npmjs.com
+#        per package, npm's replacement for publish tokens which die
+#        2027-01). Failures here are loud but non-fatal: Release
+#        binaries are already live.
 #
 # Publishing a release = pushing a tag. Delete + re-push the tag to
 # re-run (delete the Release first if it exists).
@@ -18,6 +24,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # npm trusted publishing (OIDC) — no token secret
 
 jobs:
   release:
@@ -34,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"   # npm 11.x — trusted publishing needs it
           registry-url: "https://registry.npmjs.org"
 
       - name: build + package + assemble npm
@@ -51,22 +58,32 @@ jobs:
             --title "log-labor ${VERSION}" \
             --generate-notes
 
-      - name: publish npm packages (needs NPM_TOKEN secret)
+      - name: publish npm packages (NPM_TOKEN or trusted publishing)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "npm: NPM_TOKEN secret not set — skipping npm publish."
-            echo "npm: Release binaries above are live. To light up 'npm i -g log-labor':"
-            echo "npm:   create an npm account, npm login once, then either"
-            echo "npm:   add NPM_TOKEN to this repo's secrets and delete/re-push this tag, or"
-            echo "npm:   run log-labor/npm/publish.sh locally from a checkout."
+          publish_all() {
+            cd dist/npm
+            for pkg in log-labor-*; do
+              echo "npm publish: $pkg"
+              ( cd "$pkg" && npm publish --access public $1 )
+            done
+            echo "npm publish: log-labor (wrapper — last by design)"
+            ( cd log-labor && npm publish --access public $1 )
+          }
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            publish_all ""
             exit 0
           fi
-          cd dist/npm
-          for pkg in log-labor-*; do
-            echo "npm publish: $pkg"
-            ( cd "$pkg" && npm publish --access public )
-          done
-          echo "npm publish: log-labor (wrapper — last by design)"
-          ( cd log-labor && npm publish --access public )
+          echo "npm: NPM_TOKEN not set — attempting trusted publishing (OIDC, no token)…"
+          if publish_all "--provenance"; then
+            echo "npm: trusted publish OK"
+          else
+            echo "npm: trusted publishing did not complete (normal until registered)."
+            echo "npm: register this workflow as a Trusted Publisher per package on npmjs.com"
+            echo "npm: (log-labor + 5 platform pkgs → Settings → Trusted Publisher:"
+            echo "npm:  repository yyx462/AutoWecom-plugin, workflow release.yml),"
+            echo "npm: or set an NPM_TOKEN secret (stage-only is fine — approve on the website),"
+            echo "npm: or publish locally: log-labor/npm/publish.sh (browser 2FA)."
+            echo "npm: GitHub Release binaries above are live either way."
+          fi
