@@ -17,7 +17,7 @@ const PLATFORMS = [
 let bin = null;
 for (const [os, cpu, exe] of PLATFORMS) {
   if (os !== process.platform || cpu !== process.arch) continue;
-  try { bin = require.resolve(`@log-labor/${os}-${cpu}/${exe}`); break; } catch (_) { /* not installed */ }
+  try { bin = require.resolve(`@yyx462/${os}-${cpu}/${exe}`); break; } catch (_) { /* not installed */ }
 }
 
 if (!bin) {
