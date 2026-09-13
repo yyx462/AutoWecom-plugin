@@ -27,6 +27,6 @@ for pkg in *; do
   echo "npm/publish: @yyx462/$pkg"
   ( cd "$pkg" && npm publish --access public )
 done
-echo "npm/publish: log-labor (wrapper — last by design)"
+echo "npm/publish: @yyx462/log-labor (wrapper — last by design)"
 ( cd ../wrapper && npm publish --access public )
-echo "npm/publish: done — https://www.npmjs.com/package/log-labor"
+echo "npm/publish: done — https://www.npmjs.com/package/@yyx462/log-labor"

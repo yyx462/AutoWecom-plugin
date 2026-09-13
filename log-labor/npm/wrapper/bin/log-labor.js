@@ -23,7 +23,7 @@ for (const [os, cpu, exe] of PLATFORMS) {
 if (!bin) {
   console.error(
     'log-labor: no binary for ' + process.platform + '/' + process.arch +
-    ' — reinstall the package (npm i -g log-labor)');
+    ' — reinstall the package (npm i -g @yyx462/log-labor)');
   process.exit(2);
 }
 
