@@ -8,7 +8,7 @@ description: >-
   requests when the CLI is installed.
 ---
 
-# log-labor — 报工 via the 任务工时详细 smartsheet webhook (vdev)
+# log-labor — 报工 via the 任务工时详细 smartsheet webhook (dev)
 
 ## Commands
 
@@ -40,7 +40,7 @@ default today +08) · `--status` (状态, 已完成, 调休, 进行中, 待排�
 
 - Sheet: **任务工时详细**; keys are WRITE credentials — never print the key,
   never commit it (`~/.config/log-labor/config.json`, 0600).
-- 人员 takes the CORP userid (`zhang.san` pinyin form). `woa-…`
+- 人员 takes the CORP userid (`ying.yuxiang` pinyin form). `woa-…`
   bot-namespace ids and numeric ids are rejected **atomically** (40031) —
   a bad user value kills the whole request, nothing is written.
 - ONE op per request (mixing add+update → 40058). Rate caps: 3000 rows/min

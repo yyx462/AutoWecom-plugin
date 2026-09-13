@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -34,6 +35,15 @@ type Agent struct {
 
 const begin = "<!-- log-labor:%s begin (managed by `log-labor skill` — do not edit) -->"
 const end = "<!-- log-labor end -->"
+
+// stampBlock — trailing ownership+version marker for SKILL.md folder
+// installs. It must sit AFTER the YAML frontmatter (which has to own the
+// first bytes of the file for harnesses to parse it), so trailing HTML
+// comments carry the stamp; the AGENTS.md stanza keeps its leading wrap.
+// SkillStamp reads both layouts.
+func stampBlock(version string) string {
+	return fmt.Sprintf("\n%s\n%s\n", fmt.Sprintf(begin, version), end)
+}
 
 // Agents — the full matrix. Global paths resolve lazily via home.
 func Agents() []Agent {
@@ -128,7 +138,7 @@ func InstallGlobal(c *config.Config, a Agent) (string, error) {
 		return "", fmt.Errorf("%s has no global skill dir (use --project)", a.Name)
 	}
 	p := filepath.Join(a.Global, "SKILL.md")
-	if err := writeFile(p, Render(c, "skill")); err != nil {
+	if err := writeFile(p, Render(c, "skill")+stampBlock(config.Version)); err != nil {
 		return "", err
 	}
 	return p, nil
@@ -139,7 +149,7 @@ func InstallProject(c *config.Config, a Agent, kind, rel string) (string, error)
 	p := filepath.Join(rel)
 	switch kind {
 	case "skill":
-		if err := writeFile(filepath.Join(p, "SKILL.md"), Render(c, "skill")); err != nil {
+		if err := writeFile(filepath.Join(p, "SKILL.md"), Render(c, "skill")+stampBlock(config.Version)); err != nil {
 			return "", err
 		}
 		return filepath.Join(p, "SKILL.md"), nil
@@ -163,6 +173,88 @@ func InstallProject(c *config.Config, a Agent, kind, rel string) (string, error)
 func InstallStanza(c *config.Config, path string) error {
 	_, err := InstallProject(c, Agent{Stanza: true}, "stanza", path)
 	return err
+}
+
+// legacyTitleRe — pre-stamp installs carried the version only in the
+// title line: `# log-labor — … (vv0.1.1)` (the template had a literal
+// `v` next to the version, hence the v-run).
+var legacyTitleRe = regexp.MustCompile(`\((v+[0-9][^)]*)\)`)
+
+// SkillStamp — the CLI version an installed skill folder was rendered by
+// ("" = not ours / unreadable). Two layouts: the trailing stamp block
+// written since auto-refresh landed, and the legacy title line.
+func SkillStamp(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil {
+		return ""
+	}
+	s := string(b)
+	const mark = "<!-- log-labor:"
+	if i := strings.Index(s, mark); i >= 0 {
+		rest := s[i+len(mark):]
+		if j := strings.Index(rest, " begin"); j >= 0 {
+			return rest[:j]
+		}
+	}
+	for _, line := range strings.Split(s, "\n") {
+		if !strings.HasPrefix(line, "# log-labor") {
+			continue
+		}
+		if m := legacyTitleRe.FindStringSubmatch(line); m != nil {
+			return "v" + strings.TrimLeft(m[1], "v")
+		}
+	}
+	return ""
+}
+
+// SkillStatus — names of the global skill folders installed on this
+// machine, split into current (stamp matches version) and stale. A dev
+// build never reports stale (its stamps are release versions).
+func SkillStatus(version string) (current, stale []string) {
+	for _, a := range Agents() {
+		if a.Global == "" {
+			continue
+		}
+		st := SkillStamp(a.Global)
+		if st == "" {
+			continue
+		}
+		if version != "dev" && st != version {
+			stale = append(stale, fmt.Sprintf("%s@%s", a.Name, st))
+			continue
+		}
+		current = append(current, a.Name)
+	}
+	return current, stale
+}
+
+// RefreshStale — re-render the global skills whose version stamp
+// predates the running build (config.Version), for harnesses present on
+// this machine. Returns the agent names refreshed. Skills never
+// installed — or uninstalled, which leaves no stamp — are not
+// resurrected; dev builds never refresh.
+func RefreshStale(c *config.Config) ([]string, error) {
+	if config.Version == "dev" {
+		return nil, nil
+	}
+	var out []string
+	for _, a := range Agents() {
+		if a.Global == "" {
+			continue
+		}
+		if _, err := os.Stat(a.Root); err != nil {
+			continue // harness not installed here
+		}
+		st := SkillStamp(a.Global)
+		if st == "" || st == config.Version {
+			continue
+		}
+		if _, err := InstallGlobal(c, a); err != nil {
+			return out, err
+		}
+		out = append(out, a.Name)
+	}
+	return out, nil
 }
 
 // UninstallPath — remove our block from a stanza doc, or delete a skill

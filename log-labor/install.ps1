@@ -48,6 +48,11 @@ New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 Move-Item -Force "$Src" (Join-Path $BinDir 'log-labor.exe')
 Write-Host "installed: $BinDir\log-labor.exe"
 
+# One-step upgrades: refresh agent skills this machine already has
+# (idempotent, stamped). Silent best-effort — fresh machines have no
+# config yet, and the next-steps block covers the first install.
+try { & (Join-Path $BinDir 'log-labor.exe') skill upgrade 2>$null | Out-Null } catch {}
+
 if (($env:Path -split ';') -notcontains $BinDir) {
   Write-Host "NOTE: $BinDir is not on your PATH. Add it via Windows Settings > Environment Variables,"
   Write-Host "      or run once in PowerShell:"

@@ -288,6 +288,15 @@ func cmdDoctor(argv []string) error {
 	default:
 		fmt.Printf("person   %s\n", c.Person)
 	}
+	current, stale := skillinstall.SkillStatus(config.Version)
+	switch {
+	case len(current)+len(stale) == 0:
+		fmt.Println("skills   none installed — `log-labor skill install` gives your agents the skill")
+	case len(stale) == 0:
+		fmt.Printf("skills   up to date (%s)\n", strings.Join(current, ", "))
+	default:
+		fmt.Printf("skills   STALE %s (CLI %s) — run: log-labor skill upgrade\n", strings.Join(stale, ", "), config.Version)
+	}
 	if c.Key != "" {
 		ok, err := clientFor(c).ProbeKey(c.Key)
 		if err != nil {
@@ -542,4 +551,3 @@ func cmdSkill(argv []string) error {
 		return exitError{code: 2, msg: fmt.Sprintf("unknown skill verb %q", verb)}
 	}
 }
-
