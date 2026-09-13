@@ -49,6 +49,7 @@ for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; d
   "name": "${SCOPE}/${nos}-${narch}",
   "version": "${NPMV}",
   "description": "log-labor binary for ${os}/${arch} — installed via the log-labor wrapper's optionalDependencies",
+  "repository": { "type": "git", "url": "https://github.com/yyx462/AutoWecom-plugin" },
   "os": ["${nos}"],
   "cpu": ["${narch}"],
   "files": ["${exe}"],
