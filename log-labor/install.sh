@@ -76,6 +76,11 @@ fi
 [ "$OS" = "windows" ] || chmod +x "$BIN_DIR/log-labor$EXE"
 echo "installed: $BIN_DIR/log-labor$EXE"
 
+# One-step upgrades: refresh agent skills this machine already has
+# (idempotent, stamped). Silent best-effort — fresh machines have no
+# config yet, and the next-steps block covers the first install.
+"$BIN_DIR/log-labor$EXE" skill upgrade >/dev/null 2>&1 || true
+
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *)

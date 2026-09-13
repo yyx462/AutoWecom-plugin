@@ -88,8 +88,13 @@ Exit codes: `0` ok · `1` WeCom error · `2` usage/config problem.
 
 ## Keeping it current
 
+Mostly nothing: upgrading the CLI is one step (`npm i -g
+@yyx462/log-labor`, or the curl one-liner again) and the next
+`add`/`update`/`daily`/`doctor` run silently re-renders any installed
+skill whose stamp is older than the binary — you'll see one line,
+`skills refreshed → v0.1.3 (opencode, …)`. Manual, when you want it:
+
 ```bash
-# after a CLI update, refresh the installed skills
 log-labor skill install     # or: log-labor skill upgrade
 
 # webhook key rotated by the sheet owner? update in place
@@ -99,9 +104,11 @@ log-labor config set key <new-key>
 log-labor skill uninstall   # removes every installed copy
 ```
 
-The skill itself is versioned with the CLI (`skill install` says
-`upgrade` when the installed copy is stale); re-running install is
-always safe and idempotent.
+The skill itself is versioned with the CLI (a trailing version marker
+in each installed copy; `log-labor doctor` reports `skills STALE …`
+when one lags the binary); re-running install is always safe and
+idempotent. Skills you uninstalled stay uninstalled — the refresh only
+touches copies that are still there.
 
 ## Troubleshooting
 

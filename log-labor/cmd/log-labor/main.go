@@ -6,11 +6,30 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config"
+	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/skillinstall"
 )
 
 var version = config.Version
+
+// autoSkillRefresh — one-step upgrades: `npm i -g` (or the curl
+// installer) is the only step a user needs; the first config-using
+// command after a CLI update re-renders any agent skills whose stamp
+// predates this build. Silent unless something actually refreshed; dev
+// builds and config-less machines do nothing.
+func autoSkillRefresh() {
+	c, err := config.MustLoad()
+	if err != nil {
+		return
+	}
+	names, err := skillinstall.RefreshStale(c)
+	if err != nil || len(names) == 0 {
+		return
+	}
+	fmt.Printf("skills refreshed → %s (%s)\n", config.Version, strings.Join(names, ", "))
+}
 
 func main() {
 	args := os.Args[1:]
@@ -51,16 +70,20 @@ func dispatch(args []string) error {
 	case "init":
 		return cmdInit(args[1:])
 	case "add":
+		autoSkillRefresh()
 		return cmdAdd(args[1:])
 	case "update":
+		autoSkillRefresh()
 		return cmdUpdate(args[1:])
 	case "doctor":
+		autoSkillRefresh()
 		return cmdDoctor(args[1:])
 	case "config":
 		return cmdConfig(args[1:])
 	case "skill":
 		return cmdSkill(args[1:])
 	case "daily":
+		autoSkillRefresh()
 		return cmdDaily(args[1:])
 	case "version", "--version", "-v":
 		fmt.Println("log-labor " + version)
