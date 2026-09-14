@@ -18,6 +18,9 @@ requires: log-labor installed AND configured (`log-labor doctor` passes)
 - `--yes` anywhere
 - `--dry-run` used as a substitute for the preview flow (dry-run is fine additionally, not instead)
 - fabricating flags or field ids not present in the skill doc
+- mutating `~/.config/log-labor/config.json` (config fixes are the user's
+  call; report the problem instead — smoke 2026-09-14: a subagent perl-edited
+  `person` and double-add-ed)
 
 ## notes
 
