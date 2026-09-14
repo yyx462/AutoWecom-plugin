@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,8 +18,8 @@ import (
 
 // cmdDaily — `daily collect|sources|fit`: the end-of-day ritual.
 // Collect digests the day's agent sessions across every registered or
-// built-in store; fit drafts them into records summing to exactly one
-// working day (default 8h).
+// built-in store; fit drafts them into records summing to exactly the
+// day's total — 8h default, any user-set cap via --total.
 func cmdDaily(args []string) error {
 	if len(args) == 0 {
 		return exitError{code: 2, msg: "daily needs a verb: collect|sources|fit"}
@@ -255,20 +256,36 @@ func expandHome(p string) (string, error) {
 	return p, nil
 }
 
+// parseTotal — the user-defined day total: "10", "10h", "10小时";
+// empty → 8 (one working day). Must be > 0.
+func parseTotal(v string) (float64, error) {
+	if v == "" {
+		return 8, nil
+	}
+	norm, err := record.NormalizeHours(v)
+	if err != nil {
+		return 0, fmt.Errorf("bad --total %q (want hours, e.g. 10 / 10h / 10小时)", v)
+	}
+	f, _ := strconv.ParseFloat(norm, 64)
+	if f <= 0 {
+		return 0, fmt.Errorf("--total must be > 0, got %q", v)
+	}
+	return f, nil
+}
+
 // dailyFit — input: drafted records as `daily fit "内容"=2.5 "内容"=1`
 // bare args, or a JSON array [{"content":..., "hours":...}] on stdin.
-// Output: the fitted table (Σ = --total, default 8) + ready-to-run
-// `log-labor add` lines. Never writes to the sheet by itself.
+// Output: the fitted table (Σ = --total, default 8, user-settable per
+// day) + ready-to-run `log-labor add` lines. Never writes to the sheet
+// by itself.
 func dailyFit(args []string) error {
 	f, err := parseFlags(args)
 	if err != nil {
 		return err
 	}
-	total := 8.0
-	if v := f.val("total"); v != "" {
-		if _, err := fmt.Sscanf(v, "%f", &total); err != nil {
-			return exitError{code: 2, msg: fmt.Sprintf("bad --total %q", v)}
-		}
+	total, err := parseTotal(f.val("total"))
+	if err != nil {
+		return exitError{code: 2, msg: err.Error()}
 	}
 	var rows []record.FitRow
 	if len(f.args) > 0 {
