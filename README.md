@@ -78,11 +78,21 @@ End-of-day batch from parallel agent sessions (Σ lands on exactly the
 day's total — 8h by default):
 
 ```bash
-log-labor daily collect                     # today's sessions: project, span, msgs
+log-labor daily collect                     # today's sessions: project, span, msgs (window-clipped)
+log-labor daily collect --from 2026-09-11 --to 2026-09-13   # backfill: one section per day
 log-labor daily fit "联调"=3.2 "修DAG"=2.7   # scales+snaps to Σ=8.0, prints add lines
+echo '[{"date":"2026-09-11","content":"…","hours":2.5},…]' | log-labor daily fit   # multi-day, one shot
 log-labor daily fit "联调"=4 "修DAG"=6 --total 10h   # user-set cap: "报今天的工,按 10 小时"
 log-labor daily fit "联调"=3 --status 已完成 # one 文本 for every row+add line (default 进行中)
+log-labor daily set-window --start 09:00 --end 22:00         # global work window (+08)
+log-labor daily sources add --name <harness> … --window-start 22:00 --window-end 06:00   # per-harness window
 ```
+
+Time is the script's job: every day is clipped to its work window
+(default 09:00–22:00 +08, per-harness overrides above; end ≤ start =
+crosses midnight). Sessions alive on several days produce one row per
+day; sessions running ≥72h are excluded with a ⚠ warning — split them
+instead of trusting their attribution.
 
 `--total` accepts `10`, `10h`, `10小时` and defaults to 8 — the user
 names the cap in plain language, the agent passes the flag. The fitted

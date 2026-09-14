@@ -93,9 +93,15 @@ agent: log-labor daily collect        # today's sessions, every source
 The fitted table always carries the 文本 (状态) column — same-day
 batches default 进行中; backfilling a past day usually wants them all
 已完成, so the agent regenerates with `daily fit --status 已完成`
-before writing. Backfilling several days in one sitting: collect
-windows overlap at day boundaries, so the agent excludes sessions
-already logged under another date.
+before writing. Backfilling several days in one sitting: `daily
+collect --from D1 --to D2` prints one section per day and one `daily
+fit` call with a `"date"` per row fits them all — sessions alive on
+several days appear under EACH day, so nothing is double-counted or
+dropped. Every day is clipped to its work window (default 09:00–22:00
++08; `daily set-window` redefines it, `--window` overrides once,
+`sources add --window-start/--window-end` gives one harness its own
+schedule, night shifts included). Sessions running ≥72h are excluded
+with a warning — split them rather than trusting their attribution.
 
 Overtime days have their own cap — say the number and the agent fits to
 it instead of 8 ("help me log today to 10 hours"):

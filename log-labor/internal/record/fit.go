@@ -7,11 +7,14 @@ import (
 )
 
 // FitRow — one drafted labor record: what was done and the RAW hours
-// (the agent's honest estimate). Fitted is filled by FitToDay.
+// (the agent's honest estimate). Fitted is filled by FitToDay. Date is
+// optional: set on every row to fit several days in one shot (rows
+// are grouped per date, each day fitted to the total separately).
 type FitRow struct {
 	Content string  `json:"content"`
 	Raw     float64 `json:"hours"` // stdin field name: hours
 	Fitted  float64 `json:"fitted,omitempty"`
+	Date    string  `json:"date,omitempty"` // "2006-01-02"; all-or-nothing across rows
 }
 
 // Step — the hours granularity: everything snaps to half-hour blocks.
