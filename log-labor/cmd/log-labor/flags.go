@@ -27,7 +27,7 @@ var flagTakesValue = map[string]bool{
 	"link": true, "record-id": true, "key": true, "agent": true, "o": true,
 	"sheet": true, "endpoint": true, "db": true, "total": true, "name": true, "format": true,
 	"path": true, "timestamp-field": true, "cwd-field": true, "session-field": true,
-	"title-field": true,
+	"title-field": true, "map": true,
 }
 var aliases = map[string]string{
 	"c": "content", "h": "hours", "r": "record-id", "y": "yes",
@@ -117,6 +117,31 @@ func prompt(label, def string) (string, error) {
 		return def, nil
 	}
 	return line, nil
+}
+
+// promptMultiline — read a pasted multi-line document from the terminal;
+// an empty line (or EOF) ends the paste. Leading empty lines are ignored
+// so the first Enter just clears the prompt line.
+func promptMultiline(label string) (string, error) {
+	fmt.Printf("? %s\n  (粘贴后以空行结束 — end the paste with an empty line)\n", label)
+	var b strings.Builder
+	for {
+		line, err := stdin.ReadString('\n')
+		if line == "" && err != nil { // EOF
+			break
+		}
+		if strings.TrimSpace(line) == "" {
+			if b.Len() > 0 {
+				break
+			}
+			continue
+		}
+		b.WriteString(line)
+		if err != nil {
+			break // EOF right after a partial line
+		}
+	}
+	return b.String(), nil
 }
 
 // maskKey — first4…last4 (a key is a write credential; never print it whole).

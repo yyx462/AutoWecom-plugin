@@ -47,7 +47,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Print(`log-labor ` + version + ` — 报工 into the ` + "`任务工时详细`" + ` smartsheet
+	fmt.Print(`log-labor ` + version + ` — 报工 into your WeCom 智能表格 labor sheet
 
   log-labor init                                  configure key + corp id (+ sample row)
   log-labor add -c "内容" -h 2.5 [--date --status --person
@@ -55,6 +55,7 @@ func usage() {
   log-labor update --record-id R [same field flags]
   log-labor doctor [--write-sample]               config + key health, no writes
   log-labor config get|set|list|path [key] [value]   # + default_status|default_proposer|due_mirror
+  log-labor profile import [file]                 sheet fields/statuses from 接收外部数据 → 示例数据
   log-labor daily collect                        digest today's agent sessions (all sources)
   log-labor daily sources list|add|remove|test    registry of session stores for collect
   log-labor daily fit "内容"=2.5 …|--total N      fit drafts to sum exactly N (default 8)
@@ -80,6 +81,8 @@ func dispatch(args []string) error {
 		return cmdDoctor(args[1:])
 	case "config":
 		return cmdConfig(args[1:])
+	case "profile":
+		return cmdProfile(args[1:])
 	case "skill":
 		return cmdSkill(args[1:])
 	case "daily":

@@ -119,6 +119,8 @@ func writeRow(c *config.Config, f *flags, add bool) error {
 }
 
 // sampleValues — the marked probe row: today / second status / 0.5h.
+// Optional roles only when the profile maps them (partial profiles are
+// legal since profile import).
 func sampleValues(c *config.Config) (map[string]any, error) {
 	status := "已完成"
 	for _, s := range c.Profile.Statuses {
@@ -130,14 +132,19 @@ func sampleValues(c *config.Config) (map[string]any, error) {
 			break
 		}
 	}
-	return record.BuildValues(&c.Profile, record.Options{
-		Person:   c.Person,
-		Status:   status,
-		Content:  sampleContent(),
-		Hours:    "0.5",
-		Proposer: c.Person,
-		Blocker:  "无",
-	}, true)
+	opts := record.Options{
+		Person:  c.Person,
+		Status:  status,
+		Content: sampleContent(),
+		Hours:   "0.5",
+	}
+	if c.Profile.Fields["proposer"].ID != "" {
+		opts.Proposer = c.Person
+	}
+	if c.Profile.Fields["blocker"].ID != "" {
+		opts.Blocker = "无"
+	}
+	return record.BuildValues(&c.Profile, opts, true)
 }
 
 func writeSample(c *config.Config, interactive bool) error {
@@ -191,7 +198,7 @@ func cmdInit(argv []string) error {
 		if c.Key != "" {
 			shown = maskKey(c.Key)
 		}
-		key, err = prompt("Webhook key (接收外部数据)", shown)
+		key, err = prompt("Webhook key (智能表格 → 右上角文档操作 → 接收外部数据 → Webhook 地址)", shown)
 		if err != nil {
 			return err
 		}
@@ -240,6 +247,7 @@ func cmdInit(argv []string) error {
 		return exitError{code: 1, msg: "key rejected (840001 invalid webhook) — check `log-labor config set key`"}
 	}
 	fmt.Printf("key accepted (%s).\n", maskKey(c.Key))
+	fmt.Println("different sheet (fields/statuses differ)? log-labor profile import — paste 接收外部数据 → 示例数据")
 	if f.has("no-sample") {
 		return nil
 	}

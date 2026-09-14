@@ -95,14 +95,23 @@ func CnDate(s string) string {
 
 // BuildValues — typed values map keyed by field id; only the set fields.
 // Date defaults to today (+08) when addDefaults is set (add mode).
+// A role the profile doesn't map (profile import with an unmatched
+// column) disables its flag: unset ⇒ skipped, set ⇒ loud error — never
+// a silent write under the empty field id.
 func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any, error) {
 	f := p.Fields
 	v := map[string]any{}
+	missing := func(role string) error {
+		return fmt.Errorf("profile maps no %s field — cannot set --%s (log-labor profile import)", role, role)
+	}
 
 	setUser := func(role, val string) error {
 		val = strings.TrimSpace(val)
 		if val == "" {
 			return nil
+		}
+		if f[role].ID == "" {
+			return missing(role)
 		}
 		if strings.HasPrefix(val, "woa-") {
 			return fmt.Errorf("%s: %q is a bot-namespace id — the webhook rejects it atomically (40031); use the corp userid (e.g. zhang.san)", role, val)
@@ -111,6 +120,12 @@ func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any
 		return nil
 	}
 	setDate := func(role, val string) error {
+		if strings.TrimSpace(val) == "" {
+			return nil
+		}
+		if f[role].ID == "" {
+			return missing(role)
+		}
 		ms, err := DateToMs(val)
 		if err != nil {
 			return fmt.Errorf("%s: %w", role, err)
@@ -128,6 +143,9 @@ func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any
 		return nil, err
 	}
 	if o.Status != "" {
+		if f["status"].ID == "" {
+			return nil, missing("status")
+		}
 		ok := false
 		for _, s := range p.Statuses {
 			if s == o.Status {
@@ -141,9 +159,15 @@ func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any
 		v[f["status"].ID] = []map[string]string{{"text": o.Status}}
 	}
 	if o.Content != "" {
+		if f["content"].ID == "" {
+			return nil, missing("content")
+		}
 		v[f["content"].ID] = o.Content
 	}
 	if o.Link != "" {
+		if f["link"].ID == "" {
+			return nil, missing("link")
+		}
 		ids := []map[string]string{}
 		for _, id := range strings.Split(o.Link, ",") {
 			if id = strings.TrimSpace(id); id != "" {
@@ -155,6 +179,9 @@ func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any
 		}
 	}
 	if o.Hours != "" {
+		if f["hours"].ID == "" {
+			return nil, missing("hours")
+		}
 		h, err := NormalizeHours(o.Hours)
 		if err != nil {
 			return nil, fmt.Errorf("hours: %w", err)
@@ -166,29 +193,39 @@ func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any
 		return nil, err
 	}
 	if o.Proposer != "" {
+		if f["proposer"].ID == "" {
+			return nil, missing("proposer")
+		}
 		v[f["proposer"].ID] = o.Proposer
 	}
 	if o.Blocker != "" {
+		if f["blocker"].ID == "" {
+			return nil, missing("blocker")
+		}
 		v[f["blocker"].ID] = o.Blocker
 	}
 
 	if addDefaults {
-		if _, ok := v[f["date"].ID]; !ok {
-			today, _ := DateToMs(time.Now().In(cst).Format("2006-01-02"))
-			v[f["date"].ID] = today
+		if id := f["date"].ID; id != "" {
+			if _, ok := v[id]; !ok {
+				today, _ := DateToMs(time.Now().In(cst).Format("2006-01-02"))
+				v[id] = today
+			}
 		}
-		if _, ok := v[f["status"].ID]; !ok {
-			def := "进行中"
-			for _, s := range p.Statuses {
-				if s == def {
-					goto found
+		if id := f["status"].ID; id != "" {
+			if _, ok := v[id]; !ok {
+				def := "进行中"
+				for _, s := range p.Statuses {
+					if s == def {
+						goto found
+					}
 				}
+				if len(p.Statuses) > 0 {
+					def = p.Statuses[0]
+				}
+			found:
+				v[id] = []map[string]string{{"text": def}}
 			}
-			if len(p.Statuses) > 0 {
-				def = p.Statuses[0]
-			}
-		found:
-			v[f["status"].ID] = []map[string]string{{"text": def}}
 		}
 		if _, ok := v[f["due"].ID]; !ok && o.DueMirror {
 			if dv, okDate := v[f["date"].ID]; okDate {
