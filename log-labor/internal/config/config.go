@@ -44,6 +44,14 @@ type Defaults struct {
 // "on by default", so the on-disk flag is a pointer and missing = on.
 func (d Defaults) MirrorDue() bool { return d.DueMirror == nil || *d.DueMirror }
 
+// Daily — the global default work window for `daily collect` (+08).
+// Empty strings mean the built-in default 09:00–22:00; a Source may
+// override either edge per harness (night shifts etc.).
+type Daily struct {
+	WindowStart string `json:"window_start,omitempty"` // HH:MM, default 09:00
+	WindowEnd   string `json:"window_end,omitempty"`   // HH:MM, default 22:00
+}
+
 // Config — the on-disk document.
 type Config struct {
 	Endpoint  string           `json:"endpoint"`             // webhook base URL (key appended per call)
@@ -54,6 +62,7 @@ type Config struct {
 	Profile   Profile          `json:"profile"`
 	Defaults  Defaults         `json:"defaults,omitempty"` // add-path defaults (see Defaults)
 	Sources   []sources.Source `json:"sources,omitempty"`  // session stores for daily collect
+	Daily     Daily            `json:"daily,omitempty"`    // default work window for daily collect
 }
 
 // Dir — config directory (~/.config/log-labor, honor $XDG_CONFIG_HOME;

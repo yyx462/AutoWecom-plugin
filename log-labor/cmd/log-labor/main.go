@@ -138,8 +138,10 @@ func usage() {
   log-labor doctor [--write-sample]               config + key health, no writes
   log-labor config get|set|list|path [key] [value]   # + default_status|default_proposer|due_mirror
   log-labor profile import [file]                 sheet fields/statuses from 接收外部数据 → 示例数据
-  log-labor daily collect                        digest today's agent sessions (all sources)
+  log-labor daily collect [--date D | --from D1 --to D2] [--window HH:MM-HH:MM]
+                                  digest agent sessions per day, clipped to the work window
   log-labor daily sources list|add|remove|test    registry of session stores for collect
+  log-labor daily set-window --start 09:00 --end 22:00   # global work window default
   log-labor daily fit "内容"=2.5 …|--total N      fit drafts to sum exactly N (default 8)
   log-labor upgrade                               # self-update: npm i -g … / install.sh one-liner
   log-labor version

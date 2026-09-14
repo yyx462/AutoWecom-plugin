@@ -17,15 +17,91 @@ import (
 	"time"
 )
 
-// Session — one agent session in the digest.
+// Session — one agent session in the digest, already clipped to ONE
+// day's work window. A session alive across several days yields one
+// row per day; Span is the session's whole-life length (for the ≥72h
+// long-session rule), not the row's.
 type Session struct {
 	Source string `json:"source"` // tag printed in the digest
 	Dir    string `json:"dir"`
 	Title  string `json:"title"`
-	Start  int64  `json:"start"` // ms epoch
-	End    int64  `json:"end"`   // ms epoch
-	Msgs   int    `json:"msgs"`
+	Start  int64  `json:"start"`          // ms epoch, in-window
+	End    int64  `json:"end"`            // ms epoch, in-window
+	Msgs   int    `json:"msgs"`           // in-window messages only
+	Day    string `json:"day"`            // window-day "2006-01-02" (+08)
+	Span   int64  `json:"-"`              // whole-session length ms (72h rule)
+	GStart int64  `json:"-"`              // whole-session first message ms (warning display)
 	File   string `json:"file,omitempty"` // source jsonl (title fallbacks)
+}
+
+// LongSession — a session whose whole-life span reaches this can't be
+// attributed to specific days honestly; it is excluded with a warning
+// instead of polluting the digest.
+const LongSession = 72 * time.Hour
+
+// cst — the sheet's timezone, fixed +08 (matches cmd's cnZone).
+var cst = time.FixedZone("CST", 8*3600)
+
+// Window — one harness's daily work window in +08 wall clock
+// ("09:00"–"22:00" default; end ≤ start means the window crosses
+// midnight, e.g. a night-shift "22:00"–"06:00"). Messages outside the
+// window don't count; a message belongs to the day whose window
+// contains it.
+type Window struct{ Start, End string }
+
+// DefaultWindow — 09:00–22:00 +08.
+func DefaultWindow() Window { return Window{Start: "09:00", End: "22:00"} }
+
+// ParseWindow — "09:00-22:00" → Window; validates both HH:MM ends.
+func ParseWindow(s string) (Window, error) {
+	a, b, ok := strings.Cut(s, "-")
+	if !ok {
+		return Window{}, fmt.Errorf("bad window %q — want START-END, e.g. 09:00-22:00", s)
+	}
+	w := Window{Start: strings.TrimSpace(a), End: strings.TrimSpace(b)}
+	return w, w.Valid()
+}
+
+// Valid — both ends are HH:MM.
+func (w Window) Valid() error {
+	for _, p := range []string{w.Start, w.End} {
+		if _, err := time.ParseInLocation("15:04", p, cst); err != nil {
+			return fmt.Errorf("bad window edge %q — want HH:MM", p)
+		}
+	}
+	return nil
+}
+
+func parseHM(p string) int64 {
+	t, _ := time.ParseInLocation("15:04", p, cst)
+	h, m, _ := t.Clock()
+	return int64(h)*3_600_000 + int64(m)*60_000
+}
+
+// offsetMs — window start as ms-of-day; subtracting it from any
+// timestamp maps window start to 00:00 of the window-day.
+func (w Window) offsetMs() int64 { return parseHM(w.Start) }
+
+// lenMs — window length; end == start means a full 24h day.
+func (w Window) lenMs() int64 {
+	d := parseHM(w.End) - parseHM(w.Start)
+	if d <= 0 {
+		d += 24 * 3_600_000
+	}
+	return d
+}
+
+// windowDay — the day key ("2006-01-02", +08) whose window contains
+// ms; ok=false when ms falls outside every window (e.g. 03:00 under
+// the default 09:00–22:00 window).
+func (w Window) windowDay(ms int64) (string, bool) {
+	shifted := time.UnixMilli(ms - w.offsetMs()).In(cst) // window start → 00:00
+	tod := int64(shifted.Hour())*3_600_000 + int64(shifted.Minute())*60_000 +
+		int64(shifted.Second())*1_000 + int64(shifted.Nanosecond())/1_000_000
+	if tod >= w.lenMs() {
+		return "", false
+	}
+	return shifted.Format("2006-01-02"), true
 }
 
 // Source — one registered or built-in session store.
@@ -33,6 +109,13 @@ type Source struct {
 	Name   string `json:"name"`   // digest tag (opencode, claude, …)
 	Format string `json:"format"` // opencode-sqlite | jsonl-claude | jsonl-generic
 	Path   string `json:"path"`   // db file or directory root
+
+	// this harness's own work window (HH:MM +08), overriding the
+	// config's global daily window — e.g. a night-shift
+	// "22:00"–"06:00". Either edge set alone: the other falls back to
+	// the global window's edge.
+	WindowStart string `json:"window_start,omitempty"`
+	WindowEnd   string `json:"window_end,omitempty"`
 
 	// jsonl-generic only: which JSON keys hold the signal.
 	TimestampField string `json:"timestamp_field,omitempty"`
@@ -78,82 +161,144 @@ func BuiltIns() []Source {
 	return out
 }
 
-// Collect — dispatch by format.
-func Collect(s Source, fromMs int64) ([]Session, error) {
+// Collect — dispatch by format. win clips messages to one harness's
+// work window; [fromMs, toMs) is the padded fetch range (day-aligned).
+func Collect(s Source, win Window, fromMs, toMs int64) ([]Session, error) {
 	switch s.Format {
 	case "opencode-sqlite":
-		return CollectOpencode(s.Path, fromMs)
+		return CollectOpencode(s.Path, win, fromMs, toMs)
 	case "jsonl-claude":
-		return CollectClaudeJSONL(s.Path, fromMs)
+		return CollectClaudeJSONL(s.Path, win, fromMs, toMs)
 	case "jsonl-codex":
-		return CollectCodexJSONL(s.Path, fromMs)
+		return CollectCodexJSONL(s.Path, win, fromMs, toMs)
 	case "jsonl-generic":
-		return CollectGenericJSONL(s, fromMs)
+		return CollectGenericJSONL(s, win, fromMs, toMs)
 	default:
 		return nil, fmt.Errorf("unknown format %q (want one of %s)", s.Format, strings.Join(KnownFormats, "|"))
 	}
 }
 
-// CollectAll — run every source, tag results, merge + sort by start.
-// Per-source errors degrade to a warning line, never abort the digest.
-func CollectAll(sources []Source, fromMs int64) ([]Session, []string) {
+// CollectAll — run every source with ITS effective window (resolved by
+// the caller), merge, drop rows for days outside the requested set,
+// apply the ≥72h long-session rule (warn once per session), sort by
+// start. Per-source errors degrade to a warning line, never abort.
+func CollectAll(srcs []Source, win func(Source) Window, fromMs, toMs int64, days []string) ([]Session, []string) {
+	want := map[string]bool{}
+	for _, d := range days {
+		want[d] = true
+	}
 	var out []Session
 	var warns []string
-	for _, s := range sources {
-		ss, err := Collect(s, fromMs)
+	longSeen := map[string]bool{}
+	for _, s := range srcs {
+		w := win(s)
+		ss, err := Collect(s, w, fromMs, toMs)
 		if err != nil {
 			warns = append(warns, fmt.Sprintf("[%s] skipped: %v", s.Name, err))
 			continue
 		}
 		for i := range ss {
 			ss[i].Source = s.Name
+			if !want[ss[i].Day] {
+				continue // fetch-range padding, not a requested day
+			}
+			if time.Duration(ss[i].Span)*time.Millisecond >= LongSession {
+				key := fmt.Sprintf("%s|%s|%s|%d", s.Name, ss[i].Dir, ss[i].Title, ss[i].Span)
+				if !longSeen[key] {
+					longSeen[key] = true
+					warns = append(warns, fmt.Sprintf(
+						"长会话 (≥72h) 已剔除，无法按天归属 — 请拆分会话: [%s] %s→%s %s",
+						s.Name,
+						time.UnixMilli(ss[i].GStart).In(cst).Format("01-02 15:04"),
+						time.UnixMilli(ss[i].GStart+ss[i].Span).In(cst).Format("01-02 15:04"),
+						ss[i].Title))
+				}
+				continue
+			}
+			out = append(out, ss[i])
 		}
-		out = append(out, ss...)
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Start < out[b].Start })
 	return out, warns
 }
 
 // CollectOpencode — sqlite via the sqlite3 CLI (zero Go deps,
-// read-only). One grouped query; ms epoch in/out.
-func CollectOpencode(db string, fromMs int64) ([]Session, error) {
+// read-only). Two grouped queries: per-(session, window-day) in-window
+// buckets over the fetch range, plus whole-life MIN/MAX per session
+// (the 72h rule needs the true span, not just what the range sees).
+// ms epoch in/out.
+func CollectOpencode(db string, win Window, fromMs, toMs int64) ([]Session, error) {
 	if _, err := os.Stat(db); err != nil {
 		return nil, fmt.Errorf("no store at %s", db)
 	}
+	// windowDay(ms) in SQL: shift back by window start AND +8h zone
+	// (SQLite % is UTC-anchored and C-style), take the +08 calendar
+	// day; double-mod keeps negative dividends from leaking through.
 	q := fmt.Sprintf(`SELECT MIN(m.time_created) AS t0, MAX(m.time_created) AS t1,
-		COUNT(*) AS msgs, s.directory AS dir, s.title AS title
+		COUNT(*) AS msgs, m.session_id AS sid, s.directory AS dir, s.title AS title,
+		date((m.time_created - %d + 28800000)/1000, 'unixepoch') AS day
 		FROM message m JOIN session s ON s.id = m.session_id
-		WHERE m.time_created >= %d GROUP BY m.session_id ORDER BY t0;`, fromMs)
-	out, err := exec.Command("sqlite3", "-json", "-readonly", db, q).Output()
+		WHERE m.time_created >= %d AND m.time_created < %d
+		  AND ((m.time_created - %d + 28800000) %% 86400000 + 86400000) %% 86400000 < %d
+		GROUP BY m.session_id, day ORDER BY t0;`,
+		win.offsetMs(), fromMs, toMs, win.offsetMs(), win.lenMs())
+	spanQ := `SELECT session_id AS sid, MIN(time_created) AS g0, MAX(time_created) AS g1
+		FROM message GROUP BY session_id;`
+	rowsJSON, err := exec.Command("sqlite3", "-json", "-readonly", db, q).Output()
 	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
-			return nil, fmt.Errorf("sqlite3: %s", strings.TrimSpace(string(ee.Stderr)))
-		}
-		return nil, fmt.Errorf("sqlite3 failed: %v", err)
+		return nil, sqliteErr("collect", err)
+	}
+	spanJSON, err := exec.Command("sqlite3", "-json", "-readonly", db, spanQ).Output()
+	if err != nil {
+		return nil, sqliteErr("spans", err)
 	}
 	var rows []struct {
 		T0    int64  `json:"t0"`
 		T1    int64  `json:"t1"`
 		Msgs  int    `json:"msgs"`
+		Sid   string `json:"sid"`
 		Dir   string `json:"dir"`
 		Title string `json:"title"`
+		Day   string `json:"day"`
 	}
-	if err := json.Unmarshal(out, &rows); err != nil {
+	if err := json.Unmarshal(rowsJSON, &rows); err != nil {
 		return nil, fmt.Errorf("parse sqlite output: %v", err)
+	}
+	var spans []struct {
+		Sid string `json:"sid"`
+		G0  int64  `json:"g0"`
+		G1  int64  `json:"g1"`
+	}
+	if err := json.Unmarshal(spanJSON, &spans); err != nil {
+		return nil, fmt.Errorf("parse sqlite spans: %v", err)
+	}
+	type gspan struct{ start, span int64 }
+	g := map[string]gspan{}
+	for _, sp := range spans {
+		g[sp.Sid] = gspan{start: sp.G0, span: sp.G1 - sp.G0}
 	}
 	ss := make([]Session, 0, len(rows))
 	for _, r := range rows {
-		ss = append(ss, Session{Dir: r.Dir, Title: r.Title, Start: r.T0, End: r.T1, Msgs: r.Msgs})
+		gs := g[r.Sid]
+		ss = append(ss, Session{Dir: r.Dir, Title: r.Title, Start: r.T0, End: r.T1,
+			Msgs: r.Msgs, Day: r.Day, Span: gs.span, GStart: gs.start})
 	}
 	return ss, nil
+}
+
+func sqliteErr(what string, err error) error {
+	if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
+		return fmt.Errorf("sqlite3 %s: %s", what, strings.TrimSpace(string(ee.Stderr)))
+	}
+	return fmt.Errorf("sqlite3 %s failed: %v", what, err)
 }
 
 // CollectClaudeJSONL — Claude Code's per-project store: <root>/<munged-
 // cwd>/*.jsonl, line-JSON with timestamp (RFC3339), cwd, sessionId.
 // Title: first "summary" line, else first user message text.
-func CollectClaudeJSONL(root string, fromMs int64) ([]Session, error) {
+func CollectClaudeJSONL(root string, win Window, fromMs, _ int64) ([]Session, error) {
 	summaries := map[string]string{} // file → first summary line
-	ss, err := walkJSONL(root, fromMs, func(o map[string]any, acc *acc) {
+	ss, err := walkJSONL(root, win, fromMs, func(o map[string]any, acc *acc) {
 		if t, _ := o["type"].(string); t == "summary" {
 			if _, ok := summaries[acc.File]; !ok {
 				summaries[acc.File], _ = o["summary"].(string)
@@ -164,7 +309,7 @@ func CollectClaudeJSONL(root string, fromMs int64) ([]Session, error) {
 		if !ok {
 			return
 		}
-		acc.see(ms)
+		acc.see(win, ms)
 		if t2, _ := o["type"].(string); acc.Title == "" && t2 == "user" {
 			acc.Title = claudeUserText(o["message"])
 		}
@@ -246,13 +391,13 @@ func codexUserText(o map[string]any) string {
 // (session_meta carries uuid + cwd, but every line is file-scoped, so
 // the session key is per-file). Title: first real user message —
 // boilerplate context injections never win.
-func CollectCodexJSONL(root string, fromMs int64) ([]Session, error) {
-	return walkJSONL(root, fromMs, func(o map[string]any, acc *acc) {
+func CollectCodexJSONL(root string, win Window, fromMs, _ int64) ([]Session, error) {
+	return walkJSONL(root, win, fromMs, func(o map[string]any, acc *acc) {
 		ms, ok := parseTime(o["timestamp"])
 		if !ok {
 			return
 		}
-		acc.see(ms)
+		acc.see(win, ms)
 		if acc.Title == "" {
 			acc.Title = codexUserText(o)
 		}
@@ -271,16 +416,16 @@ func CollectCodexJSONL(root string, fromMs int64) ([]Session, error) {
 // CollectGenericJSONL — declared-field line-JSON: the escape hatch for
 // "special agents". Timestamp accepts epoch seconds/ms (number or
 // numeric string) or RFC3339.
-func CollectGenericJSONL(s Source, fromMs int64) ([]Session, error) {
+func CollectGenericJSONL(s Source, win Window, fromMs, _ int64) ([]Session, error) {
 	if s.TimestampField == "" {
 		return nil, fmt.Errorf("jsonl-generic needs --timestamp-field")
 	}
-	return walkJSONL(s.Path, fromMs, func(o map[string]any, acc *acc) {
+	return walkJSONL(s.Path, win, fromMs, func(o map[string]any, acc *acc) {
 		ms, ok := parseTime(o[s.TimestampField])
 		if !ok {
 			return
 		}
-		acc.see(ms)
+		acc.see(win, ms)
 		if acc.Title == "" && s.TitleField != "" {
 			acc.Title, _ = o[s.TitleField].(string)
 		}
@@ -299,16 +444,27 @@ func CollectGenericJSONL(s Source, fromMs int64) ([]Session, error) {
 	})
 }
 
-// acc — per (file, session) accumulator.
+// acc — per (file, session) accumulator: whole-life span (the 72h
+// rule) plus one in-window bucket per day (bacc).
 type acc struct {
-	Start, End int64
-	Msgs       int
+	Start, End int64 // global first/last message ms
+	Msgs       int   // global message count
 	Title      string
 	Dir        string
-	File       string // source jsonl file (for file-scoped fallbacks)
+	File       string // source jsonl (for file-scoped fallbacks)
+	buckets    map[string]*bacc
 }
 
-func (a *acc) see(ms int64) {
+// bacc — one window-day's in-window span + message count.
+type bacc struct {
+	Start, End int64
+	Msgs       int
+}
+
+// see — record one message: global span always; the day bucket only
+// when the window contains it (messages between midnight and 09:00
+// under the default window simply don't count toward any day).
+func (a *acc) see(w Window, ms int64) {
 	if a.Start == 0 || ms < a.Start {
 		a.Start = ms
 	}
@@ -316,13 +472,44 @@ func (a *acc) see(ms int64) {
 		a.End = ms
 	}
 	a.Msgs++
+	day, ok := w.windowDay(ms)
+	if !ok {
+		return
+	}
+	if a.buckets == nil {
+		a.buckets = map[string]*bacc{}
+	}
+	b := a.buckets[day]
+	if b == nil {
+		b = &bacc{Start: ms, End: ms}
+		a.buckets[day] = b
+	}
+	if ms < b.Start {
+		b.Start = ms
+	}
+	if ms > b.End {
+		b.End = ms
+	}
+	b.Msgs++
+}
+
+// rows — one Session per day bucket; Span/GStart carry the whole-life
+// values CollectAll needs for the 72h rule.
+func (a *acc) rows() []Session {
+	out := make([]Session, 0, len(a.buckets))
+	for day, b := range a.buckets {
+		out = append(out, Session{Dir: a.Dir, Title: a.Title, Start: b.Start, End: b.End,
+			Msgs: b.Msgs, Day: day, Span: a.End - a.Start, GStart: a.Start, File: a.File})
+	}
+	return out
 }
 
 // walkJSONL — recurse root for *.jsonl, group lines by sessionKey
 // (falling back to the file path when the store has no session ids),
 // letting onLine read store-specific fields. Files' ModTime earlier
-// than fromMs are skipped unread.
-func walkJSONL(root string, fromMs int64,
+// than fromMs are skipped unread; sessions started BEFORE the range
+// still count for days they were alive on (no start-day cutoff).
+func walkJSONL(root string, win Window, fromMs int64,
 	onLine func(o map[string]any, a *acc),
 	sessionKey func(o map[string]any) string,
 	cwd func(o map[string]any) string,
@@ -334,9 +521,8 @@ func walkJSONL(root string, fromMs int64,
 	if !st.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", root)
 	}
-	type key struct{ file, sess string }
-	accs := map[key]*acc{}
-	var order []key
+	accs := map[string]*acc{}
+	var order []string
 	filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
 			return nil
@@ -375,19 +561,15 @@ func walkJSONL(root string, fromMs int64,
 			if a.Msgs == 0 {
 				continue
 			}
-			id := key{path, k}
+			id := path + "\x00" + k
 			accs[id] = a
 			order = append(order, id)
 		}
 		return nil
 	})
-	out := make([]Session, 0, len(accs))
+	var out []Session
 	for _, id := range order {
-		a := accs[id]
-		if a.Start < fromMs {
-			continue // session started before the target day
-		}
-		out = append(out, Session{Dir: a.Dir, Title: a.Title, Start: a.Start, End: a.End, Msgs: a.Msgs, File: a.File})
+		out = append(out, accs[id].rows()...)
 	}
 	return out, nil
 }

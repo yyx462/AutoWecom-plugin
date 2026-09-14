@@ -60,9 +60,12 @@ Agent speed rules (live-proved during the 9/11–9/13 backfills):
 - Fit once with `--date` + `--status` instead of editing rows after
   writing; later corrections while record_ids are known = `update
   --record-id`, never a second add.
-- Backfilling several days in one sitting: dedupe the digests against
-  days already logged BEFORE drafting (collect windows overlap at
-  midnight).
+- Backfilling several days in one sitting: `daily collect --from D1
+  --to D2` prints one section per day; sessions alive on several days
+  produce one row PER DAY, so double-counting cannot happen — draft
+  per day and fit all days in ONE `daily fit` call (every row carries
+  its `"date"`). The script owns all time math; never hand-compute
+  times, never re-attribute a session across days yourself.
 - Missing record_ids (older rows) = hand-edit in the sheet UI; the
   local write-journal that would fix this is ticketed in `docs/tickets/`.
 - Upgrades are EXPLICIT: `log-labor upgrade` (npm-managed installs →
@@ -80,7 +83,7 @@ Agent speed rules (live-proved during the 9/11–9/13 backfills):
   `log-labor profile import` — the console sample is ground truth; never
   hand-edit field ids in config.json. Roles the sheet doesn't map simply
   disable their flags.
-- 人员 takes the CORP userid (`ying.yuxiang` pinyin form). `woa-…`
+- 人员 takes the CORP userid (`zhang.san` pinyin form). `woa-…`
   bot-namespace ids and numeric ids are rejected **atomically** (40031) —
   a bad user value kills the whole request, nothing is written.
 - ONE op per request (mixing add+update → 40058). Rate caps: 3000 rows/min
@@ -97,30 +100,39 @@ When the user asks to 总结今天 / 报工总结 / close out the day — or run
 parallel agent sessions all day and reports at once — or asks "help me
 log today to 10 hours" (帮我把今天报成 10 小时):
 
-1. `log-labor daily collect [--date YYYY-MM-DD]` — digest of that day's
-   agent sessions: project, time span, message count, title.
+1. `log-labor daily collect [--date D | --from D1 --to D2]` — per-day
+   digest of agent sessions: project, in-window span, message count,
+   title. ALL time filtering is the script's job: every day is clipped
+   to its work window (default 09:00–22:00 +08; `daily set-window`
+   changes the default, `--window HH:MM-HH:MM` overrides once, and a
+   source's own `--window-start/--window-end` at `sources add` wins
+   for that harness). Sessions running ≥72h are EXCLUDED with a ⚠
+   line — tell the user to split such sessions instead of guessing.
+   Never compute times yourself and never dig raw timestamps out of
+   session stores; trust the printed rows.
 2. Draft 2–6 records grouping the digest into real work themes with
    HONEST raw hours; ask the user when the digest is ambiguous. Never
    invent work that is not in the digest (or that the user rejects).
 3. Fit them to the day's total — pipe a JSON array to
    `log-labor daily fit --date <day>`:
    `echo '[{"content":"…","hours":2.5},…]' | log-labor daily fit --date 2026-09-11`
-   (or bare args: `log-labor daily fit "内容"=2.5 …`). The fit scales
-   proportions, snaps to 0.5h, and lands Σ on EXACTLY the total; it
-   prints the fitted table (with its 文本 column) plus ready
-   `log-labor add` lines (with `--date`). Total = 8.0h unless the user
-   set the day's cap: `--total 10` (accepts 10 / 10h / 10小时) — "log
-   today to 10 hours" is collect → draft → `daily fit --total 10` →
-   add, nothing else. `--status 已完成` threads one status into every
-   printed add line; without it both table and lines mean 进行中.
+   (or bare args: `log-labor daily fit "内容"=2.5 …`). Multi-day
+   backfill = ONE call, a "date" on every row:
+   `echo '[{"date":"2026-09-11","content":"…","hours":2.5},…]' | log-labor daily fit`
+   — each day is fitted to the total separately and every printed add
+   line carries the right `--date`. The fit scales proportions, snaps
+   to 0.5h, and lands Σ on EXACTLY the total; it prints the fitted
+   table (with its 文本 column) plus ready `log-labor add` lines.
+   Total = 8.0h unless the user set the day's cap: `--total 10`
+   (accepts 10 / 10h / 10小时) — "log today to 10 hours" is collect →
+   draft → `daily fit --total 10` → add, nothing else. `--status 已完成`
+   threads one status into every printed add line; without it both
+   table and lines mean 进行中.
 4. Show the fitted table to the user — WITH the 文本 (状态) column, not
    just content+hours — and confirm status BEFORE writing: same-day
    logs default 进行中; backfills of past days usually want 已完成
    (`daily fit --status 已完成` regenerates the add lines). After OK,
    run each add line. Cite which digest session each record came from.
-   Backfilling several days in one sitting: `daily collect` windows
-   OVERLAP at day boundaries — exclude sessions already logged under
-   another date; never double-count one session.
 
 Hours corrections after insert: the webhook only WRITES — no read, no
 delete. `log-labor update --record-id R -h <h>` fixes a row while R is
@@ -165,15 +177,26 @@ session logs needs a one-time registration — the agent does this itself:
    needed. The sqlite family is opencode-only — other sqlite stores are
    NOT supported yet.)
 3. Verify BEFORE trusting it:
-   `log-labor daily sources test --name <harness> [--date YYYY-MM-DD]`
-   → session count + sample rows. Then `daily collect` — every digest
-   line is tagged with the source name.
-4. Harnesses with NO durable transcripts (Cursor, Trae): those sessions
+   `log-labor daily sources test --name <harness> [--date D | --from D1 --to D2]`
+   → session count + sample rows (already window-clipped). Then
+   `daily collect` — every digest line is tagged with the source name.
+4. Harness with its OWN schedule (night shifts etc.): give it a
+   private work window at registration —
+   `log-labor daily sources add … --window-start 22:00 --window-end 06:00`
+   (end ≤ start = crosses midnight; a single edge falls back to the
+   global window). The global default for every harness:
+   `log-labor daily set-window --start 09:00 --end 22:00`. Check who
+   has what via `daily sources list`.
+5. Harnesses with NO durable transcripts (Cursor, Trae): those sessions
    can't be collected — ask the user what they did there and merge it
    into the same fit.
 
-Never invent a source's contents; if `test` returns 0 sessions for a
-day the user says they worked, say so and ask.
+Long sessions are an anti-pattern: a session alive ≥72h cannot be
+attributed to days honestly, so collect EXCLUDES it with a ⚠ line —
+tell the user to start fresh sessions (or at least touch them daily)
+instead of arguing with the digest. Never invent a source's contents;
+if `test` returns 0 sessions for a day the user says they worked, say
+so and ask.
 
 ## Onboarding a coworker (张三)
 

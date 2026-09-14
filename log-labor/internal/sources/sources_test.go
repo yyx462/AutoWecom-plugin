@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func mustWrite(t *testing.T, path, content string) {
@@ -17,12 +18,66 @@ func mustWrite(t *testing.T, path, content string) {
 	}
 }
 
-// 2026-09-11 02:00 +08 = 1789092000000 ms; +10min and +30min variants.
-const (
-	t0ms = 1789092000000
-	t1ms = 1789092600000
-	t2ms = 1789093800000
-)
+// msOf — "+08:00" fixture timestamps → ms epoch.
+func msOf(t *testing.T, s string) int64 {
+	t.Helper()
+	ts, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ts.UnixMilli()
+}
+
+func TestParseWindow(t *testing.T) {
+	w, err := ParseWindow("09:00-22:00")
+	if err != nil || w.Start != "09:00" || w.End != "22:00" {
+		t.Fatalf("ParseWindow: %v %+v", err, w)
+	}
+	if got := (Window{Start: "09:00", End: "22:00"}).lenMs(); got != 13*3_600_000 {
+		t.Errorf("lenMs default = %d", got)
+	}
+	if got := (Window{Start: "22:00", End: "06:00"}).lenMs(); got != 8*3_600_000 {
+		t.Errorf("lenMs night = %d", got)
+	}
+	if got := (Window{Start: "09:00", End: "09:00"}).lenMs(); got != 24*3_600_000 {
+		t.Errorf("lenMs full-day = %d", got)
+	}
+	for _, bad := range []string{"9-22", "0900-2200", "09:00", "09:00-", "-22:00", "aa:bb-cc:dd"} {
+		if _, err := ParseWindow(bad); err == nil {
+			t.Errorf("ParseWindow(%q) must error", bad)
+		}
+	}
+}
+
+func TestWindowDay(t *testing.T) {
+	def := Window{Start: "09:00", End: "22:00"}
+	cases := []struct {
+		at   string
+		day  string
+		want bool
+	}{
+		{"2026-09-11T08:59:00+08:00", "", false},
+		{"2026-09-11T09:00:00+08:00", "2026-09-11", true},
+		{"2026-09-11T21:59:00+08:00", "2026-09-11", true},
+		{"2026-09-11T22:00:00+08:00", "", false},
+		{"2026-09-12T02:00:00+08:00", "", false}, // deep-night tail belongs to no day
+	}
+	for _, c := range cases {
+		day, ok := def.windowDay(msOf(t, c.at))
+		if ok != c.want || (ok && day != c.day) {
+			t.Errorf("default windowDay(%s) = %q,%v; want %q,%v", c.at, day, ok, c.day, c.want)
+		}
+	}
+	// night shift: 22:00–06:00 — an 01:00 message belongs to the PREVIOUS day
+	night := Window{Start: "22:00", End: "06:00"}
+	day, ok := night.windowDay(msOf(t, "2026-09-12T01:00:00+08:00"))
+	if !ok || day != "2026-09-11" {
+		t.Errorf("night windowDay(9/12 01:00) = %q,%v; want 2026-09-11,true", day, ok)
+	}
+	if _, ok := night.windowDay(msOf(t, "2026-09-11T21:00:00+08:00")); ok {
+		t.Error("21:00 is outside the night window")
+	}
+}
 
 func TestCollectClaudeJSONL(t *testing.T) {
 	root := t.TempDir()
@@ -31,7 +86,7 @@ func TestCollectClaudeJSONL(t *testing.T) {
 {"type":"user","timestamp":"2026-09-11T10:00:00+08:00","cwd":"/Users/x/projA","sessionId":"s1","message":{"content":"hello"}}
 {"type":"assistant","timestamp":"2026-09-11T10:10:00+08:00","cwd":"/Users/x/projA","sessionId":"s1","message":{"content":[{"type":"text","text":"hi"}]}}
 `)
-	ss, err := CollectClaudeJSONL(root, t0ms-3600_000)
+	ss, err := CollectClaudeJSONL(root, DefaultWindow(), msOf(t, "2026-09-10T00:00:00+08:00"), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,13 +97,28 @@ func TestCollectClaudeJSONL(t *testing.T) {
 	if s.Msgs != 2 || s.Title != "Fixing the webhook" || s.Dir != "/Users/x/projA" {
 		t.Errorf("wrong session: %+v", s)
 	}
-	if s.Start != t0ms || s.End != t1ms {
+	if s.Start != msOf(t, "2026-09-11T10:00:00+08:00") || s.End != msOf(t, "2026-09-11T10:10:00+08:00") {
 		t.Errorf("times: %d..%d", s.Start, s.End)
 	}
-	// day filter: sessions starting before the boundary are dropped
-	ss, _ = CollectClaudeJSONL(root, t0ms+1000)
-	if len(ss) != 0 {
-		t.Errorf("day filter should drop the session, got %d", len(ss))
+	if s.Day != "2026-09-11" || s.Span != 10*60_000 {
+		t.Errorf("day/span: %+v", s)
+	}
+	// out-of-window messages never reach the bucket, but do stretch Span
+	mustWrite(t, filepath.Join(root, "-Users-x-projA", "b.jsonl"),
+		`{"type":"user","timestamp":"2026-09-11T02:00:00+08:00","cwd":"/Users/x/projA","sessionId":"s2","message":{"content":"deep night"}}
+{"type":"assistant","timestamp":"2026-09-11T11:00:00+08:00","cwd":"/Users/x/projA","sessionId":"s2","message":{"content":[{"type":"text","text":"day work"}]}}
+`)
+	ss, err = CollectClaudeJSONL(root, DefaultWindow(), msOf(t, "2026-09-10T00:00:00+08:00"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ss) != 2 {
+		t.Fatalf("want 2 sessions, got %d: %+v", len(ss), ss)
+	}
+	for _, x := range ss {
+		if x.Title == "deep night" && (x.Msgs != 1 || x.Start != x.End) {
+			t.Errorf("02:00 message must not count toward the day: %+v", x)
+		}
 	}
 }
 
@@ -61,7 +131,8 @@ func TestCollectGenericJSONL(t *testing.T) {
 		"{\"ts\": \"2026-09-11T11:50:00+08:00\", \"project\": \"/p/B\", \"sid\": \"s2\", \"what\": \"rfc3339\"}\n")
 	s := Source{Name: "g", Format: "jsonl-generic", Path: root,
 		TimestampField: "ts", CwdField: "project", SessionField: "sid", TitleField: "what"}
-	ss, err := CollectGenericJSONL(s, t0ms-3600_000)
+	fullDay := Window{Start: "00:00", End: "00:00"} // 24h: everything counts
+	ss, err := CollectGenericJSONL(s, fullDay, t0msOf(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,33 +144,83 @@ func TestCollectGenericJSONL(t *testing.T) {
 		byID[x.Dir] = x
 	}
 	a, b := byID["/p/A"], byID["/p/B"]
-	if a.Msgs != 2 || a.Start != t0ms || a.End != t1ms {
+	if a.Msgs != 2 || a.Start != t0msOf() || a.End != t1msOf() {
 		t.Errorf("epoch session wrong: %+v", a)
 	}
 	if b.Msgs != 1 || b.Title != "rfc3339" {
 		t.Errorf("rfc session wrong: %+v", b)
 	}
-	if _, err := CollectGenericJSONL(Source{Format: "jsonl-generic", Path: root}, t0ms); err == nil {
+	if _, err := CollectGenericJSONL(Source{Format: "jsonl-generic", Path: root}, fullDay, t0msOf(), 0); err == nil {
 		t.Error("missing --timestamp-field must error")
 	}
 }
 
-func TestCollectAllTagsAndSorts(t *testing.T) {
+// t0msOf/t1msOf — the legacy fixtures (2026-09-11 10:00/10:10 +08;
+// kept for the epoch-seconds/ms parse checks).
+func t0msOf() int64 {
+	ts, _ := time.Parse(time.RFC3339, "2026-09-11T10:00:00+08:00")
+	return ts.UnixMilli()
+}
+func t1msOf() int64 {
+	ts, _ := time.Parse(time.RFC3339, "2026-09-11T10:10:00+08:00")
+	return ts.UnixMilli()
+}
+
+func TestCollectAllWindowAndLeaks(t *testing.T) {
 	root := t.TempDir()
-	mustWrite(t, filepath.Join(root, "late.jsonl"),
-		"{\"ts\": 1789093800000, \"project\": \"/p/B\", \"sid\": \"b\", \"what\": \"late\"}\n")
-	mustWrite(t, filepath.Join(root, "early.jsonl"),
-		"{\"ts\": 1789092000000, \"project\": \"/p/A\", \"sid\": \"a\", \"what\": \"early\"}\n")
-	out, warns := CollectAll([]Source{
-		{Name: "g", Format: "jsonl-generic", Path: root,
-			TimestampField: "ts", CwdField: "project", SessionField: "sid", TitleField: "what"},
-		{Name: "broken", Format: "opencode-sqlite", Path: "/nonexistent/db"},
-	}, t0ms-3600_000)
-	if len(warns) != 1 || !strings.Contains(warns[0], "[broken]") {
-		t.Errorf("broken source must degrade to a warning: %v", warns)
+	mk := func(name, sid string, msgs ...string) {
+		mustWrite(t, filepath.Join(root, name), strings.Join(msgs, "\n")+"\n")
 	}
-	if len(out) != 2 || out[0].Source != "g" || out[0].Title != "early" || out[1].Title != "late" {
-		t.Errorf("merge/sort wrong: %+v", out)
+	// s1: one session alive on 9/11 AND 9/13 (the 9/11-report leak shape):
+	// rows must split per day — the 9/11 row ends at 9/11's last message.
+	mk("s1.jsonl", "s1",
+		`{"ts":"2026-09-11T09:57:00+08:00","project":"/p/A","sid":"s1","what":"day work"}`,
+		`{"ts":"2026-09-11T21:00:00+08:00","project":"/p/A","sid":"s1","what":"day work"}`,
+		`{"ts":"2026-09-13T10:00:00+08:00","project":"/p/A","sid":"s1","what":"later days"}`)
+	// long: alive 9/8→9/13 (≥72h) — excluded with a warning
+	mk("long.jsonl", "long",
+		`{"ts":"2026-09-08T10:00:00+08:00","project":"/p/B","sid":"long","what":"eternal"}`,
+		`{"ts":"2026-09-11T15:00:00+08:00","project":"/p/B","sid":"long","what":"eternal"}`,
+		`{"ts":"2026-09-13T10:00:00+08:00","project":"/p/B","sid":"long","what":"eternal"}`)
+	// night owl: only messages at 02:00 — outside every default window
+	mk("night.jsonl", "night",
+		`{"ts":"2026-09-11T02:00:00+08:00","project":"/p/C","sid":"night","what":"insomnia"}`)
+	g := Source{Name: "g", Format: "jsonl-generic", Path: root,
+		TimestampField: "ts", CwdField: "project", SessionField: "sid", TitleField: "what"}
+	from := msOf(t, "2026-09-11T00:00:00+08:00")
+	out, warns := CollectAll([]Source{g, {Name: "broken", Format: "opencode-sqlite", Path: "/nonexistent/db"}},
+		func(Source) Window { return DefaultWindow() },
+		from, from+3*86_400_000, []string{"2026-09-11"})
+	if len(warns) != 2 {
+		t.Fatalf("want broken-source + long-session warnings, got %v", warns)
+	}
+	if !strings.Contains(warns[0], "长会话") || !strings.Contains(warns[0], "eternal") {
+		t.Errorf("long-session warning wrong: %q", warns[0])
+	}
+	if !strings.Contains(warns[1], "[broken]") {
+		t.Errorf("broken source must degrade to a warning: %q", warns[1])
+	}
+	if len(out) != 1 {
+		t.Fatalf("want exactly the 9/11 row of s1, got %+v (warns %v)", out, warns)
+	}
+	r := out[0]
+	if r.Day != "2026-09-11" || r.Source != "g" {
+		t.Errorf("row tags wrong: %+v", r)
+	}
+	if r.Start != msOf(t, "2026-09-11T09:57:00+08:00") || r.End != msOf(t, "2026-09-11T21:00:00+08:00") {
+		t.Errorf("9/11 row must end at 9/11's own last message, not bleed into 9/13: %+v", r)
+	}
+	if r.Msgs != 2 || r.Span < 48*3_600_000 {
+		t.Errorf("msgs/span wrong (span must span the real 9/11→9/13 life): %+v", r)
+	}
+	// the same session CAN appear on 9/13 when that day is requested
+	out, _ = CollectAll([]Source{g}, func(Source) Window { return DefaultWindow() },
+		from, from+3*86_400_000, []string{"2026-09-11", "2026-09-13"})
+	if len(out) != 2 {
+		t.Fatalf("want one row per day for s1, got %+v", out)
+	}
+	if out[0].Day != "2026-09-11" || out[1].Day != "2026-09-13" {
+		t.Errorf("per-day rows wrong: %+v / %+v", out[0], out[1])
 	}
 }
 
@@ -113,11 +234,10 @@ func TestKnownFormats(t *testing.T) {
 			t.Errorf("%s missing from KnownFormats", want)
 		}
 	}
-	_, err := Collect(Source{Format: "jsonl-claude", Path: "/nope"}, t0ms)
-	if err == nil || strings.Contains(err.Error(), "unknown format") {
+	if _, err := Collect(Source{Format: "jsonl-claude", Path: "/nope"}, DefaultWindow(), 0, 0); err == nil || strings.Contains(err.Error(), "unknown format") {
 		t.Errorf("known format should pass dispatch: %v", err)
 	}
-	if _, err := Collect(Source{Format: "bogus", Path: "/nope"}, t0ms); err == nil || !strings.Contains(err.Error(), "unknown format") {
+	if _, err := Collect(Source{Format: "bogus", Path: "/nope"}, DefaultWindow(), 0, 0); err == nil || !strings.Contains(err.Error(), "unknown format") {
 		t.Error("bogus format must error with unknown format")
 	}
 }
@@ -136,7 +256,7 @@ func TestCollectCodexJSONL(t *testing.T) {
 	mustWrite(t, filepath.Join(root, day, "rollout-20260911T120000-def.jsonl"),
 		`{"timestamp":"2026-09-11T12:00:00+08:00","type":"event_msg","payload":{"type":"user_message","message":"调试 airflow dag"}}`)
 
-	ss, err := CollectCodexJSONL(root, t0ms-3600_000)
+	ss, err := CollectCodexJSONL(root, DefaultWindow(), msOf(t, "2026-09-10T00:00:00+08:00"), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,20 +266,19 @@ func TestCollectCodexJSONL(t *testing.T) {
 	byTitle := map[string]Session{}
 	for _, s := range ss {
 		byTitle[s.Title] = s
+		if s.Day != "2026-09-11" {
+			t.Errorf("day tag wrong: %+v", s)
+		}
 	}
 	main, ok := byTitle["修复 nightly 测试"]
 	if !ok {
 		t.Fatalf("boilerplate title must lose to real user text: %+v", ss)
 	}
-	if main.Dir != "/Users/x/projC" || main.Msgs != 4 || main.Start != t0ms {
+	if main.Dir != "/Users/x/projC" || main.Msgs != 4 || main.Start != msOf(t, "2026-09-11T10:00:00+08:00") {
 		t.Errorf("meta session wrong: %+v", main)
 	}
 	def, ok := byTitle["调试 airflow dag"]
 	if !ok || def.Dir != "" {
 		t.Errorf("meta-less session wrong: %+v", def)
-	}
-	// day filter: boundary after both fixtures' starts drops everything
-	if ss, _ := CollectCodexJSONL(root, t0ms+12*3600_000+60_000); len(ss) != 0 {
-		t.Errorf("day filter should drop everything, got %d", len(ss))
 	}
 }

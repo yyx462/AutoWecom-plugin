@@ -27,7 +27,8 @@ var flagTakesValue = map[string]bool{
 	"link": true, "record-id": true, "key": true, "agent": true, "o": true,
 	"sheet": true, "endpoint": true, "db": true, "total": true, "name": true, "format": true,
 	"path": true, "timestamp-field": true, "cwd-field": true, "session-field": true,
-	"title-field": true, "map": true,
+	"title-field": true, "map": true, "window": true, "from": true, "to": true,
+	"start": true, "end": true, "window-start": true, "window-end": true,
 }
 var aliases = map[string]string{
 	"c": "content", "h": "hours", "r": "record-id", "y": "yes",
