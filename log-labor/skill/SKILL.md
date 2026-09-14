@@ -31,8 +31,10 @@ default today +08) · `--status` (状态, 已完成, 调休, 进行中, 待排�
 1. Derive facts from session evidence: 需求内容 = ONE concise sentence on
    the actual work; hours from the user or a stated estimate — if hours
    are ambiguous, ASK, don't guess.
-2. Run WITHOUT `--yes` first and show the user the preview table; confirm
-   creative summaries. Then re-run with `--yes` (or let the confirm run).
+2. Run WITHOUT `--yes` first and show the user the preview table — keep
+   日期, 文本 (状态), 需求内容 and 工时 all visible; confirm creative
+   summaries AND the status column. Then re-run with `--yes` (or let
+   the confirm run).
 3. Check exit 0 and report the `record_id` back with the summary.
 4. Rework/closure later = `update --record-id`, never a second row.
 
@@ -67,18 +69,42 @@ log today to 10 hours" (帮我把今天报成 10 小时):
    `echo '[{"content":"…","hours":2.5},…]' | log-labor daily fit --date 2026-09-11`
    (or bare args: `log-labor daily fit "内容"=2.5 …`). The fit scales
    proportions, snaps to 0.5h, and lands Σ on EXACTLY the total; it
-   prints the fitted table plus ready `log-labor add` lines (with
-   `--date`). Total = 8.0h unless the user set the day's cap:
-   `--total 10` (accepts 10 / 10h / 10小时) — "log today to 10 hours"
-   is collect → draft → `daily fit --total 10` → add, nothing else.
-4. Show the fitted table to the user; after OK, run each add line.
-   Cite which digest session each record came from.
+   prints the fitted table (with its 文本 column) plus ready
+   `log-labor add` lines (with `--date`). Total = 8.0h unless the user
+   set the day's cap: `--total 10` (accepts 10 / 10h / 10小时) — "log
+   today to 10 hours" is collect → draft → `daily fit --total 10` →
+   add, nothing else. `--status 已完成` threads one status into every
+   printed add line; without it both table and lines mean 进行中.
+4. Show the fitted table to the user — WITH the 文本 (状态) column, not
+   just content+hours — and confirm status BEFORE writing: same-day
+   logs default 进行中; backfills of past days usually want 已完成
+   (`daily fit --status 已完成` regenerates the add lines). After OK,
+   run each add line. Cite which digest session each record came from.
+   Backfilling several days in one sitting: `daily collect` windows
+   OVERLAP at day boundaries — exclude sessions already logged under
+   another date; never double-count one session.
 
 Hours corrections after insert: the webhook only WRITES — no read, no
 delete. `log-labor update --record-id R -h <h>` fixes a row while R is
 still known from its add output; without R the user edits the row by
 hand in the sheet UI. Mention this ONLY when the user asks to change
 an already-logged row — never repeat it on every 报工.
+
+## Another sheet, same shape (interim)
+
+The config holds ONE sheet (key + field-id profile). To point the CLI
+at a same-shaped sibling sheet (identical column titles and statuses,
+different field ids + webhook key) until native profiles land:
+
+1. `cp ~/.config/log-labor/config.json{,.bak}` — restore = copy back.
+2. jq-swap `.key` and every `.profile.fields.<role>.id` in
+   `~/.config/log-labor/config.json` (match roles by column TITLE from
+   the sibling sheet's 接收外部数据 schema sample); keep the file 0600.
+3. `log-labor doctor` — the key probe MUST pass before any add.
+
+Native multi-sheet support (`log-labor profile add|use`, a `--profile`
+flag, schema-JSON import that derives the field map by itself) is
+ticketed under `docs/tickets/` — do NOT grow the jq dance.
 
 ## Session sources — setup for any agent
 

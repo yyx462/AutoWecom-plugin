@@ -61,13 +61,22 @@ day's total — 8h by default):
 log-labor daily collect                     # today's sessions: project, span, msgs
 log-labor daily fit "联调"=3.2 "修DAG"=2.7   # scales+snaps to Σ=8.0, prints add lines
 log-labor daily fit "联调"=4 "修DAG"=6 --total 10h   # user-set cap: "报今天的工,按 10 小时"
+log-labor daily fit "联调"=3 --status 已完成 # one 文本 for every row+add line (default 进行中)
 ```
 
 `--total` accepts `10`, `10h`, `10小时` and defaults to 8 — the user
-names the cap in plain language, the agent passes the flag. Fixing a
+names the cap in plain language, the agent passes the flag. The fitted
+table always shows the 文本 (状态) column — same-day logs default
+进行中, backfills of past days usually want `--status 已完成` — so
+status is confirmed BEFORE anything is written. Fixing a
 logged row later: `log-labor update --record-id R -h <new>` while R is
 still known from the add output (the webhook is write-only — no read,
 no delete); anything older is edited by hand in the sheet UI.
+
+Second, same-shaped sheet? The config holds ONE sheet today — see the
+skill's "Another sheet, same shape (interim)" section for the
+backup/jq-swap/doctor procedure; native `profile` support is ticketed
+in `docs/tickets/0001-sheet-profiles.md`.
 
 Collect scans every source it knows: built-ins (opencode, Claude Code,
 Codex) auto-detect, and any other agent harness registers itself via

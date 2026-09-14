@@ -273,11 +273,24 @@ func parseTotal(v string) (float64, error) {
 	return f, nil
 }
 
+// fitStatus — the 文本 (状态) column shown in the fitted table and
+// threaded into the printed add lines. Empty --status → 进行中, the
+// same default `add` itself applies, so the column never lies.
+func fitStatus(f *flags) (shown, flag string) {
+	shown = f.val("status")
+	if shown == "" {
+		shown = "进行中"
+		return shown, ""
+	}
+	return shown, " --status " + shown
+}
+
 // dailyFit — input: drafted records as `daily fit "内容"=2.5 "内容"=1`
 // bare args, or a JSON array [{"content":..., "hours":...}] on stdin.
 // Output: the fitted table (Σ = --total, default 8, user-settable per
-// day) + ready-to-run `log-labor add` lines. Never writes to the sheet
-// by itself.
+// day; one 文本 column so the user confirms status BEFORE writing) +
+// ready-to-run `log-labor add` lines. Never writes to the sheet by
+// itself.
 func dailyFit(args []string) error {
 	f, err := parseFlags(args)
 	if err != nil {
@@ -313,11 +326,12 @@ func dailyFit(args []string) error {
 	if err != nil {
 		return exitError{code: 2, msg: err.Error()}
 	}
+	shown, statusFlag := fitStatus(f)
 	fmt.Printf("== 报工草稿 (fit to %.1fh) ==\n", total)
 	sum := 0.0
 	for i, r := range fitted {
 		sum += r.Fitted
-		fmt.Printf("  %d. %-4.1fh → %-4.1fh  %s\n", i+1, r.Raw, r.Fitted, r.Content)
+		fmt.Printf("  %d. %-4.1fh → %-4.1fh  [%s]  %s\n", i+1, r.Raw, r.Fitted, shown, r.Content)
 	}
 	fmt.Printf("Σ = %.1fh\n", sum)
 	day := f.val("date")
@@ -327,7 +341,7 @@ func dailyFit(args []string) error {
 	}
 	fmt.Println("-- insert with --yes after the user confirms:")
 	for _, r := range fitted {
-		fmt.Printf("log-labor add -c %q -h %g%s --yes\n", r.Content, r.Fitted, dateFlag)
+		fmt.Printf("log-labor add -c %q -h %g%s%s --yes\n", r.Content, r.Fitted, dateFlag, statusFlag)
 	}
 	return nil
 }
