@@ -62,11 +62,15 @@ What your agent is trained to do (from the skill):
    actual work; if the hours are ambiguous it asks you instead of
    inventing a number.
 2. **Preview before writing.** First run omits `--yes`, so you see the
-   exact row; creative summaries get confirmed with you.
+   exact row — 日期, 文本 (状态), 需求内容, 工时 — creative summaries
+   AND the status column get confirmed with you.
 3. **Report the record_id.** The `rAbC12`-style id is how you reference
    the row later for updates.
 4. **Close, don't duplicate.** Rework/closure is `update --record-id`,
    never a second row.
+5. **Defaults for speed.** 预计完成时间 mirrors 日期 on add; pin
+   `config set default_status 已完成` / `config set default_proposer
+   <corp-id>` once and the agent stops passing those flags.
 
 ## End-of-day: 总结今天 (daily batch)
 
@@ -77,8 +81,16 @@ the day's sessions into 2–6 records scaled to one working day:
 你: 帮我总结今天并报工
 agent: log-labor daily collect        # today's sessions, every source
        drafts records per theme → log-labor daily fit → shows the
-       fitted table (Σ = 8.0h) → you OK it → one log-labor add per record
+       fitted table (Σ = 8.0h, 文本 column visible) → you OK it →
+       one log-labor add per record
 ```
+
+The fitted table always carries the 文本 (状态) column — same-day
+batches default 进行中; backfilling a past day usually wants them all
+已完成, so the agent regenerates with `daily fit --status 已完成`
+before writing. Backfilling several days in one sitting: collect
+windows overlap at day boundaries, so the agent excludes sessions
+already logged under another date.
 
 Overtime days have their own cap — say the number and the agent fits to
 it instead of 8 ("help me log today to 10 hours"):
