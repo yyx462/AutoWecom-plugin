@@ -18,6 +18,8 @@ log-labor add -c "修复导出崩溃" -h 2 --status 已完成 --due 2026-09-20 -
 log-labor update --record-id R --status 已完成          # closure = UPDATE, never a new row
 log-labor doctor                                       # config + key health, no writes
 log-labor doctor --write-sample                        # one marked sample row (asks nothing)
+log-labor config set default_status 已完成              # every add starts 已完成
+log-labor config set due_mirror off                    # 预计完成时间 mirrors 日期 (default on)
 log-labor skill install                                # (re)install this skill for detected agents
 ```
 
@@ -37,6 +39,31 @@ default today +08) · `--status` ({{STATUSES}}) · `--person` (corp id)
    the confirm run).
 3. Check exit 0 and report the `record_id` back with the summary.
 4. Rework/closure later = `update --record-id`, never a second row.
+
+## Defaults (add-path speedups)
+
+`add` fills these WITHOUT flags (update never applies defaults —
+unset optionals stay untouched there):
+
+- 预计完成时间 mirrors the row's 日期 (on by default; disable with
+  `config set due_mirror off`); `--due` always wins.
+- `config set default_status 已完成` — the usual 文本, e.g. for
+  teams that only log finished work.
+- `config set default_proposer <corp-id>` — 提出人 when it is
+  always the same person.
+
+Agent speed rules (live-proved during the 9/11–9/13 backfills):
+
+- ONE confirm per batch — present the whole fitted table (日期/文本/
+  需求内容/工时) a single time; never re-confirm row by row.
+- Fit once with `--date` + `--status` instead of editing rows after
+  writing; later corrections while record_ids are known = `update
+  --record-id`, never a second add.
+- Backfilling several days in one sitting: dedupe the digests against
+  days already logged BEFORE drafting (collect windows overlap at
+  midnight).
+- Missing record_ids (older rows) = hand-edit in the sheet UI; the
+  local write-journal that would fix this is ticketed in `docs/tickets/`.
 
 ## Hard facts (live-proved 2026-09-11, enforced by the CLI)
 

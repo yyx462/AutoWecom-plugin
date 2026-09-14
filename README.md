@@ -83,7 +83,9 @@ Codex) auto-detect, and any other agent harness registers itself via
 `log-labor daily sources add` — see the skill's "Session sources"
 section.
 
-Missing `--date` = today (Asia/Shanghai); missing `--status` = 进行中;
+Missing `--date` = today (Asia/Shanghai); missing `--status` = 进行中
+(or `config set default_status 已完成` team-wide); 预计完成时间
+defaults to the row's 日期 (`config set due_mirror off` disables);
 unset optionals are omitted from the row, never written empty. Exit codes:
 `0` ok · `1` WeCom returned an error · `2` usage/config problem.
 

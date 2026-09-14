@@ -30,6 +30,22 @@ func resolvePerson(c *config.Config, f *flags) string {
 	return c.Person
 }
 
+// applyDefaults — add only: fill unset optionals from config defaults
+// (status/proposer) and arm the due mirror. Update stays literal.
+func applyDefaults(o record.Options, c *config.Config, add bool) record.Options {
+	if !add {
+		return o
+	}
+	o.DueMirror = c.Defaults.MirrorDue()
+	if o.Status == "" {
+		o.Status = c.Defaults.Status
+	}
+	if o.Proposer == "" {
+		o.Proposer = c.Defaults.Proposer
+	}
+	return o
+}
+
 func optsFromFlags(f *flags, person string) record.Options {
 	return record.Options{
 		Person:   person,
@@ -56,7 +72,7 @@ func writeRow(c *config.Config, f *flags, add bool) error {
 		}
 	}
 	person := resolvePerson(c, f)
-	values, err := record.BuildValues(&c.Profile, optsFromFlags(f, person), add)
+	values, err := record.BuildValues(&c.Profile, applyDefaults(optsFromFlags(f, person), c, add), add)
 	if err != nil {
 		return exitError{code: 2, msg: err.Error()}
 	}
@@ -334,14 +350,15 @@ func cmdConfig(argv []string) error {
 		if err != nil {
 			return exitError{code: 2, msg: err.Error()}
 		}
-		fmt.Printf("endpoint %s\nkey      %s\nperson   %s\nsheet    %s\n",
-			c.Endpoint, maskKey(c.Key), c.Person, c.Profile.SheetName)
+		fmt.Printf("endpoint %s\nkey      %s\nperson   %s\nsheet    %s\n", c.Endpoint, maskKey(c.Key), c.Person, c.Profile.SheetName)
+		mirror := map[bool]string{true: "on", false: "off"}[c.Defaults.MirrorDue()]
+		fmt.Printf("defaults status=%q proposer=%q due_mirror=%s\n", c.Defaults.Status, c.Defaults.Proposer, mirror)
 		return nil
 	}
 	switch f.args[0] {
 	case "get":
 		if len(f.args) < 2 {
-			return exitError{code: 2, msg: "config get <key|person|sheet|endpoint>"}
+			return exitError{code: 2, msg: "config get <key|person|sheet|endpoint|default_status|default_proposer|due_mirror>"}
 		}
 		c, err := config.MustLoad()
 		if err != nil {
@@ -356,13 +373,19 @@ func cmdConfig(argv []string) error {
 			fmt.Println(c.Profile.SheetName)
 		case "endpoint":
 			fmt.Println(c.Endpoint)
+		case "default_status":
+			fmt.Println(c.Defaults.Status)
+		case "default_proposer":
+			fmt.Println(c.Defaults.Proposer)
+		case "due_mirror":
+			fmt.Println(map[bool]string{true: "on", false: "off"}[c.Defaults.MirrorDue()])
 		default:
 			return exitError{code: 2, msg: fmt.Sprintf("unknown config key %q", f.args[1])}
 		}
 		return nil
 	case "set":
 		if len(f.args) < 3 {
-			return exitError{code: 2, msg: "config set <key|person|sheet|endpoint> <value>"}
+			return exitError{code: 2, msg: "config set <key|person|sheet|endpoint|default_status|default_proposer|due_mirror> <value>"}
 		}
 		c, err := config.MustLoad()
 		if err != nil {
@@ -381,6 +404,33 @@ func cmdConfig(argv []string) error {
 			c.Profile.SheetName = v
 		case "endpoint":
 			c.Endpoint = v
+		case "default_status":
+			if v != "" {
+				ok := false
+				for _, s := range c.Profile.Statuses {
+					if s == v {
+						ok = true
+						break
+					}
+				}
+				if !ok {
+					return exitError{code: 2, msg: fmt.Sprintf("default_status must be one of: %s", strings.Join(c.Profile.Statuses, " "))}
+				}
+			}
+			c.Defaults.Status = v
+		case "default_proposer":
+			c.Defaults.Proposer = v
+		case "due_mirror":
+			var b bool
+			switch strings.ToLower(v) {
+			case "on", "true", "1", "":
+				b = true
+			case "off", "false", "0":
+				b = false
+			default:
+				return exitError{code: 2, msg: `due_mirror wants on|off`}
+			}
+			c.Defaults.DueMirror = &b
 		default:
 			return exitError{code: 2, msg: fmt.Sprintf("unknown config key %q", f.args[1])}
 		}

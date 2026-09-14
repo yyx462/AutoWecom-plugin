@@ -68,6 +68,9 @@ What your agent is trained to do (from the skill):
    the row later for updates.
 4. **Close, don't duplicate.** Rework/closure is `update --record-id`,
    never a second row.
+5. **Defaults for speed.** 预计完成时间 mirrors 日期 on add; pin
+   `config set default_status 已完成` / `config set default_proposer
+   <corp-id>` once and the agent stops passing those flags.
 
 ## End-of-day: 总结今天 (daily batch)
 

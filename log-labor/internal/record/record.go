@@ -33,6 +33,9 @@ type Options struct {
 	Due      string
 	Proposer string
 	Blocker  string
+	// DueMirror — add only: when --due is unset, 预计完成时间 copies the
+	// row's 日期 (after date defaulting). Update ignores it.
+	DueMirror bool
 }
 
 // DateToMs — "2026-09-11" → that day 00:00 +08 as ms STRING; bare ms →
@@ -187,6 +190,11 @@ func BuildValues(p *config.Profile, o Options, addDefaults bool) (map[string]any
 		found:
 			v[f["status"].ID] = []map[string]string{{"text": def}}
 		}
+		if _, ok := v[f["due"].ID]; !ok && o.DueMirror {
+			if dv, okDate := v[f["date"].ID]; okDate {
+				v[f["due"].ID] = dv
+			}
+		}
 	}
 	return v, nil
 }
@@ -307,12 +315,12 @@ func dispWidth(s string) int {
 	for _, r := range s {
 		switch {
 		case r >= 0x1100 && r <= 0x115F, // Hangul Jamo
-			r >= 0x2E80 && r <= 0xA4CF, // CJK radicals … Yi
-			r >= 0xAC00 && r <= 0xD7A3, // Hangul syllables
-			r >= 0xF900 && r <= 0xFAFF, // CJK compat ideographs
-			r >= 0xFE30 && r <= 0xFE4F, // CJK compat forms
-			r >= 0xFF00 && r <= 0xFF60, // full-width forms
-			r >= 0xFFE0 && r <= 0xFFE6, // full-width signs
+			r >= 0x2E80 && r <= 0xA4CF,   // CJK radicals … Yi
+			r >= 0xAC00 && r <= 0xD7A3,   // Hangul syllables
+			r >= 0xF900 && r <= 0xFAFF,   // CJK compat ideographs
+			r >= 0xFE30 && r <= 0xFE4F,   // CJK compat forms
+			r >= 0xFF00 && r <= 0xFF60,   // full-width forms
+			r >= 0xFFE0 && r <= 0xFFE6,   // full-width signs
 			r >= 0x20000 && r <= 0x3FFFD: // CJK ext B+
 			w += 2
 		default:

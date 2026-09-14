@@ -31,6 +31,19 @@ type Profile struct {
 	FieldOrder []string         `json:"field_order"` // display + preview order
 }
 
+// Defaults — write-path defaults for add, set via
+// `log-labor config set default_status|default_proposer|due_mirror …`.
+// Update NEVER applies them: unset optionals stay untouched there.
+type Defaults struct {
+	Status    string `json:"status,omitempty"`     // default 文本 (must exist in profile statuses — validated at write)
+	Proposer  string `json:"proposer,omitempty"`   // default 提出人
+	DueMirror *bool  `json:"due_mirror,omitempty"` // 预计完成时间 mirrors 日期 on add; nil = true
+}
+
+// MirrorDue — tri-state booleans in JSON default-false would lie about
+// "on by default", so the on-disk flag is a pointer and missing = on.
+func (d Defaults) MirrorDue() bool { return d.DueMirror == nil || *d.DueMirror }
+
 // Config — the on-disk document.
 type Config struct {
 	Endpoint  string           `json:"endpoint"`             // webhook base URL (key appended per call)
@@ -39,7 +52,8 @@ type Config struct {
 	Mode      string           `json:"mode"`                 // direct (default) | core (broker endpoint; vNext)
 	BrokerURL string           `json:"broker_url,omitempty"` // core mode only
 	Profile   Profile          `json:"profile"`
-	Sources   []sources.Source `json:"sources,omitempty"` // session stores for daily collect
+	Defaults  Defaults         `json:"defaults,omitempty"` // add-path defaults (see Defaults)
+	Sources   []sources.Source `json:"sources,omitempty"`  // session stores for daily collect
 }
 
 // Dir — config directory (~/.config/log-labor, honor $XDG_CONFIG_HOME;
