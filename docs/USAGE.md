@@ -71,6 +71,11 @@ What your agent is trained to do (from the skill):
 5. **Defaults for speed.** 预计完成时间 mirrors 日期 on add; pin
    `config set default_status 已完成` / `config set default_proposer
    <corp-id>` once and the agent stops passing those flags.
+6. **Explicit upgrades.** A once-a-day stderr line may announce a
+   newer release (notify-only, `LOG_LABOR_NO_UPDATE_CHECK=1`
+   silences); updating is `log-labor upgrade` — npm-managed installs
+   run `npm i -g @yyx462/log-labor@latest`, everything else the
+   install.sh one-liner. Skills refresh on the next command.
 
 ## End-of-day: 总结今天 (daily batch)
 
