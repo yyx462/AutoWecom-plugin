@@ -11,10 +11,14 @@
 #      - otherwise → trusted publishing (OIDC, no token — the workflow
 #        itself is the credential; requires registration on npmjs.com
 #        per package, npm's replacement for publish tokens which die
-#        2027-01). Any failed publish fails the job: a green run with
-#        npm lagging behind shipped linux-arm64-less 0.1.3 once
-#        (2026-09-14) and broke fresh installs — the wrapper pins exact
-#        versions of its optionalDependencies.
+#      2027-01). Any failed publish fails the job: a green run with
+#      npm lagging behind shipped linux-arm64-less 0.1.3 once
+#      (2026-09-14) and broke fresh installs — the wrapper pins exact
+#      versions of its optionalDependencies.
+#   4. visibility gate: platform publishes poll `npm view` until the
+#      registry actually serves the new version (packuments replicate
+#      per-package, unordered) — only then does the wrapper publish,
+#      so `latest` never pins a missing binary.
 #
 # Publishing a release = pushing a tag. Delete + re-push the tag to
 # re-run (delete the Release first if it exists).
@@ -78,6 +82,34 @@ jobs:
               fails=$((fails+1))
             fi
           done
+
+          # Visibility gate (live 2026-09-14: 0.1.5's darwin-arm64 was
+          # published first yet resolved last — registry packuments
+          # replicate per-package, unordered): the wrapper pins exact
+          # optionalDependencies and npm SILENTLY SKIPS an unresolvable
+          # one, so a wrapper that goes latest before its binaries are
+          # readable installs broken. Poll npm view until every platform
+          # package resolves at this version; hard-fail otherwise.
+          if [ "$fails" -eq 0 ]; then
+            NPMV="${GITHUB_REF_NAME#log-labor-v}"
+            echo "npm: waiting for platform packages to resolve @$NPMV…"
+            deadline=$((SECONDS + 300))
+            for pkg in *; do
+              while [ "$(npm view "@yyx462/$pkg" version 2>/dev/null)" != "$NPMV" ]; do
+                if [ "$SECONDS" -ge "$deadline" ]; then
+                  echo "npm: @yyx462/$pkg@$NPMV still invisible after 300s — NOT publishing the wrapper." >&2
+                  echo "npm: reads replicate per-package (CDN/replicas); if this repeats," >&2
+                  echo "npm: suspect a stage-only NPM_TOKEN (versions need approval on" >&2
+                  echo "npm: npmjs.com) — approve/re-register, then re-release:" >&2
+                  echo "npm: delete tag + Release, re-push the tag." >&2
+                  exit 1
+                fi
+                sleep 10
+              done
+              echo "npm: @yyx462/$pkg resolves @$NPMV"
+            done
+          fi
+
           echo "npm publish: @yyx462/log-labor (wrapper — last by design)"
           if ! ( cd ../wrapper && npm publish --access public $ARGS ); then
             echo "npm publish FAILED: @yyx462/log-labor" >&2
