@@ -70,6 +70,7 @@ log-labor add -c "完成登录页联调" -h 3                    # today, 进行
 log-labor add -c "修复导出崩溃" -h 2 --status 已完成 --blocker "无" --due 2026-09-20
 log-labor update --record-id rAbC12 --status 已完成       # closure = update, not a new row
 log-labor doctor                                          # config + key health (no writes)
+log-labor upgrade                                         # self-update: npm i -g / install.sh one-liner
 log-labor skill upgrade                                   # manual skill refresh (auto: next command after an upgrade refreshes for you)
 ```
 

@@ -20,6 +20,7 @@ log-labor doctor                                       # config + key health, no
 log-labor doctor --write-sample                        # one marked sample row (asks nothing)
 log-labor config set default_status 已完成              # every add starts 已完成
 log-labor config set due_mirror off                    # 预计完成时间 mirrors 日期 (default on)
+log-labor upgrade                                      # self-update (npm i -g / install.sh)
 log-labor skill install                                # (re)install this skill for detected agents
 ```
 
@@ -64,6 +65,11 @@ Agent speed rules (live-proved during the 9/11–9/13 backfills):
   midnight).
 - Missing record_ids (older rows) = hand-edit in the sheet UI; the
   local write-journal that would fix this is ticketed in `docs/tickets/`.
+- Upgrades are EXPLICIT: `log-labor upgrade` (npm-managed installs →
+  `npm i -g @yyx462/log-labor@latest`, else the install.sh one-liner);
+  skills re-render on the next command after. A once-a-day stderr line
+  may announce a newer release (notify-only; LOG_LABOR_NO_UPDATE_CHECK=1
+  silences) — relay it to the user, don't act on it unasked.
 
 ## Hard facts (live-proved 2026-09-11, enforced by the CLI)
 
