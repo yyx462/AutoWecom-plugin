@@ -24,6 +24,14 @@ plugin of the new generation.
   (default `origin/master` / the auto-deployed checkout). Stamped,
   idempotent installs — see `log-labor/core/configure.sh`.
 
+## Releases (log-labor)
+
+- Release = the GitHub Actions workflow: tag `log-labor-vX.Y.Z`, push it
+  to BOTH remotes (`origin` Gitea AND `github`) — Gitea's commit status
+  stays "pending" forever, watch the GitHub run. npm publishes as
+  `@yyx462/*`. Bump the pinned fallback in `install.sh`/`install.ps1`
+  when tagging (dynamic latest-resolution falls back to the pin).
+
 ## Layout
 
     catalog.yaml          model-tool registry (rows ONLY with live core handlers)
