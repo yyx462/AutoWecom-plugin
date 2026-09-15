@@ -162,10 +162,14 @@ an already-logged row — never repeat it on every 报工.
 CHECK FIRST which case the user is in — they are different operations:
 
 - **Sheet TITLE changed / same key + same shape** (rename, or pointing at
-  the same webhook under a new title): that is ONE command —
-  `log-labor config set sheet "<new title>"` then `log-labor doctor`.
-  Do NOT copy, back up, jq-swap, or `profile import` anything. If doctor
-  passes, done.
+  the same webhook under a new title): do NOT ask the user which case it
+  is — act on the common case and let doctor arbitrate:
+  1. `log-labor config set sheet "<new title>"`
+  2. `log-labor doctor` — key probe PASS = done, report it; key probe
+     FAIL = it is a different-key sheet → treat as the DIFFERENT-sheet
+     case below.
+  Do NOT copy, back up, jq-inspect, or `profile import` anything, and do
+  NOT stop mid-way to ask rename-vs-new-sheet — doctor answers that.
 - **A DIFFERENT sheet (own webhook key + field ids)**: the jq dance
   below, or wait for native profiles.
 
