@@ -10,7 +10,18 @@
 # needs `go`. Never touches credentials — `log-labor init` does that.
 set -euo pipefail
 
-VERSION="${LOG_LABOR_VERSION:-v0.1.4}"
+# Version resolution, most specific first: env override → GitHub latest
+# release → pinned fallback. The hardcoded default MUST stay a real,
+# existing tag: it is the offline fallback when the API is unreachable.
+# (2026-09-15: a stale v0.1.4 default made every env-less `log-labor
+# upgrade` silently downgrade — found cutting v0.1.7.)
+if [ -n "${LOG_LABOR_VERSION:-}" ]; then
+  VERSION="$LOG_LABOR_VERSION"
+else
+  VERSION="$(curl -fsSL --max-time 10 https://api.github.com/repos/yyx462/AutoWecom-plugin/releases/latest 2>/dev/null \
+    | sed -n 's/.*"tag_name": *"log-labor-\(v[0-9.]*\)".*/\1/p' || true)"
+  VERSION="${VERSION:-v0.1.7}"
+fi
 BIN_DIR="${LOG_LABOR_BIN_DIR:-$HOME/.local/bin}"
 RELEASES="https://github.com/yyx462/AutoWecom-plugin/releases"
 
