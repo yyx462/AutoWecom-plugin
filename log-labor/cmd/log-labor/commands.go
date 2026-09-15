@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"git.sh.nint.com/ying.yuxiang/AutoWecom-plugin/log-labor/internal/config"
@@ -453,13 +454,34 @@ func cmdConfig(argv []string) error {
 }
 
 // cmdSkill — install|upgrade|uninstall|render.
+const skillUsage = `log-labor skill — manage this skill for agent harnesses
+
+usage:
+  log-labor skill install  [--agent NAME|--all|--project] [--dry-run] [--force]
+  log-labor skill upgrade  (alias of install)
+  log-labor skill uninstall [--agent NAME|--all|--project]
+  log-labor skill render   [-o PATH]
+
+flags:
+  --agent NAME   claude|opencode|codex|agents|cursor|trae
+  --all          every known agent (not only detected ones)
+  --project      project-relative installs (skill folders, rules, AGENTS.md stanza)
+  --dry-run      show targets, write nothing
+  --force        also overwrite SKILL.md copies that carry no log-labor stamp
+                 (hand-edited or foreign — default is to skip them)
+`
+
 func cmdSkill(argv []string) error {
 	f, err := parseFlags(argv)
 	if err != nil {
 		return err
 	}
+	if f.has("help") { // --help is side-effect free — never install on a probe
+		fmt.Print(skillUsage)
+		return nil
+	}
 	if len(f.args) == 0 {
-		return exitError{code: 2, msg: "skill needs a verb: install|upgrade|uninstall|render"}
+		return exitError{code: 2, msg: "skill needs a verb: install|upgrade|uninstall|render (--help for flags)"}
 	}
 	verb := f.args[0]
 	c, err := config.MustLoad()
@@ -519,6 +541,7 @@ func cmdSkill(argv []string) error {
 		fmt.Print(out)
 		return nil
 	case "upgrade", "install":
+		dry, force := f.has("dry-run"), f.has("force")
 		targets, err := pick()
 		if err != nil {
 			return err
@@ -528,6 +551,14 @@ func cmdSkill(argv []string) error {
 		}
 		for _, a := range targets {
 			if a.Global != "" && !project {
+				if skillinstall.ForeignTarget(a) && !force {
+					fmt.Printf("skipped  %-7s (SKILL.md present but carries no log-labor stamp — hand-edited? pass --force to overwrite)\n", a.Name)
+					continue
+				}
+				if dry {
+					fmt.Printf("would install %-7s → %s\n", a.Name, filepath.Join(a.Global, "SKILL.md"))
+					continue
+				}
 				p, err := skillinstall.InstallGlobal(c, a)
 				if err != nil {
 					return exitError{code: 2, msg: err.Error()}
@@ -537,6 +568,10 @@ func cmdSkill(argv []string) error {
 			}
 			if project {
 				for rel, kind := range a.Project {
+					if dry {
+						fmt.Printf("would install %-7s → %s\n", a.Name, rel)
+						continue
+					}
 					p, err := skillinstall.InstallProject(c, a, kind, rel)
 					if err != nil {
 						return exitError{code: 2, msg: err.Error()}
@@ -547,7 +582,7 @@ func cmdSkill(argv []string) error {
 				fmt.Printf("skipped  %-7s (project-rules agent — use --project)\n", a.Name)
 			}
 		}
-		if project { // the universal fallbacks
+		if project && !dry { // the universal fallbacks
 			for _, doc := range []string{"AGENTS.md", "CLAUDE.md"} {
 				if err := skillinstall.InstallStanza(c, doc); err != nil {
 					return exitError{code: 2, msg: err.Error()}

@@ -34,12 +34,26 @@ default today +08) · `--status` ({{STATUSES}}) · `--person` (corp id)
 1. Derive facts from session evidence: 需求内容 = ONE concise sentence on
    the actual work; hours from the user or a stated estimate — if hours
    are ambiguous, ASK, don't guess.
-2. Run WITHOUT `--yes` first and show the user the preview table — keep
-   日期, 文本 (状态), 需求内容 and 工时 all visible; confirm creative
-   summaries AND the status column. Then re-run with `--yes` (or let
-   the confirm run).
-3. Check exit 0 and report the `record_id` back with the summary.
-4. Rework/closure later = `update --record-id`, never a second row.
+2. FIRST PASS = the real command, BARE: `log-labor add -c … -h …` with
+   data flags ONLY. Never `--dry-run`, never `--yes`, never `--person`
+   on this pass. In a non-interactive shell the confirm can't read
+   stdin: the CLI exits 2 with "re-run with --yes".
+3. ON EXIT 2: STOP. Reply with the preview table (需求内容 / 工时 /
+   状态 — status visible) ending in `请确认是否提交`, and run nothing
+   else. `--yes` is ONLY for after an explicit user OK — never as a
+   self-confirm. `--dry-run` is for humans previewing; agents must not
+   substitute it for this gate.
+4. Check exit 0 and report the `record_id` back with the summary.
+5. Rework/closure later = `update --record-id`, never a second row.
+6. NEVER guess `--person` from git config, env, or repo hints. If the
+   configured person is rejected (40031 invalid userid), ask the user
+   for the correct corp id. Config changes go through
+   `log-labor config set`, never hand-editing `config.json`.
+7. `skill install` re-renders this skill from the CLI's embedded
+   template. It skips copies it cannot stamp (hand-edited ones) unless
+   `--force`, and `--dry-run` previews targets. Skill fixes belong in
+   the repo template (log-labor/internal/skill/SKILL.md.tmpl), never
+   in installed copies.
 
 ## Defaults (add-path speedups)
 
