@@ -20,6 +20,7 @@ log-labor doctor                                       # config + key health, no
 log-labor doctor --write-sample                        # one marked sample row (asks nothing)
 log-labor config set default_status 已完成              # every add starts 已完成
 log-labor config set due_mirror off                    # 预计完成时间 mirrors 日期 (default on)
+log-labor config set sheet "项目工时表"                 # retarget: same key, new sheet TITLE
 log-labor upgrade                                      # self-update (npm i -g / install.sh)
 log-labor skill install                                # (re)install this skill for detected agents
 ```
@@ -96,8 +97,10 @@ Agent speed rules (live-proved during the 9/11–9/13 backfills):
   示例数据 (智能表格 → 右上角文档操作 → 接收外部数据) via
   `log-labor profile import` — the console sample is ground truth; never
   hand-edit field ids in config.json. Roles the sheet doesn't map simply
-  disable their flags.
-- 人员 takes the CORP userid (`zhang.san` pinyin form). `woa-…`
+  disable their flags. NOTE: `profile import` is for loading a DIFFERENT
+  sheet's field-id profile — it is NOT how you change the sheet TITLE
+  (that's `config set sheet`, see the quick-start block above).
+- 人员 takes the CORP userid (`ying.yuxiang` pinyin form). `woa-…`
   bot-namespace ids and numeric ids are rejected **atomically** (40031) —
   a bad user value kills the whole request, nothing is written.
 - ONE op per request (mixing add+update → 40058). Rate caps: 3000 rows/min
@@ -155,6 +158,16 @@ hand in the sheet UI. Mention this ONLY when the user asks to change
 an already-logged row — never repeat it on every 报工.
 
 ## Another sheet, same shape (interim)
+
+CHECK FIRST which case the user is in — they are different operations:
+
+- **Sheet TITLE changed / same key + same shape** (rename, or pointing at
+  the same webhook under a new title): that is ONE command —
+  `log-labor config set sheet "<new title>"` then `log-labor doctor`.
+  Do NOT copy, back up, jq-swap, or `profile import` anything. If doctor
+  passes, done.
+- **A DIFFERENT sheet (own webhook key + field ids)**: the jq dance
+  below, or wait for native profiles.
 
 The config holds ONE sheet (key + field-id profile). To point the CLI
 at a same-shaped sibling sheet (identical column titles and statuses,
