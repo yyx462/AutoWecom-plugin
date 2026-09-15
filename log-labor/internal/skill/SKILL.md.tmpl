@@ -175,11 +175,15 @@ CHECK FIRST which case the user is in — they are different operations:
   表，webhook 是这个：…」). Do NOT add anything yet, and do NOT read a
   doctor PASS as approval — doctor probes the CONFIGURED key only; it
   says nothing about the new sheet. The configured profile's field ids
-  do not exist there, so an add would target the wrong sheet or fire
-  dead ids. FIRST ask the user for the new sheet's 接收外部数据 示例数据
-  (智能表格 → 右上角文档操作 → 接收外部数据), then `log-labor profile
-  import` it, re-run doctor, and only then add. (Interim alternative:
-  the jq dance below.)
+  may not exist there, and a wrong-id write fails ONLY at the webhook
+  (the local preview cannot catch it — the confirm gate stops first).
+  Prove the pairing BEFORE any user add: `log-labor doctor
+  --write-sample` (marked 0.5h probe row; human deletes it). errcode
+  2022004 "field not exists" = the profile does not belong to that
+  sheet — do NOT retry and do NOT hand-edit field ids: show the user
+  the doctor output (masked key + sheet), ask for the new sheet's
+  接收外部数据 示例数据, then `log-labor profile import` it, re-probe,
+  and only then add. (Interim alternative: the jq dance below.)
 
 The config holds ONE sheet (key + field-id profile). To point the CLI
 at a same-shaped sibling sheet (identical column titles and statuses,
