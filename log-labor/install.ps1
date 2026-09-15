@@ -15,7 +15,18 @@ $ErrorActionPreference = 'Stop'
 # Windows PowerShell 5.1 defaults may not include TLS 1.2.
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
-$Version = if ($env:LOG_LABOR_VERSION) { $env:LOG_LABOR_VERSION } else { 'v0.1.4' }
+# Version resolution, most specific first: env override → GitHub latest
+# release → pinned fallback (offline). The fallback MUST stay a real tag.
+# (2026-09-15: a stale v0.1.4 default silently downgraded upgrades.)
+if ($env:LOG_LABOR_VERSION) {
+  $Version = $env:LOG_LABOR_VERSION
+} else {
+  try {
+    $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/yyx462/AutoWecom-plugin/releases/latest' -TimeoutSec 10
+    $Version = if ($rel.tag_name -match '^log-labor-(v[\d.]+)$') { $Matches[1] } else { $null }
+  } catch { $Version = $null }
+  $Version = if ($Version) { $Version } else { 'v0.1.7' }
+}
 # win32-x64 is the only prebuilt target; it also runs on ARM64 Windows
 # via x64 emulation.
 $Arch = 'amd64'
