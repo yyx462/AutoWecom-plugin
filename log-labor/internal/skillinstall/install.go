@@ -257,6 +257,21 @@ func RefreshStale(c *config.Config) ([]string, error) {
 	return out, nil
 }
 
+// ForeignTarget — the agent's global SKILL.md exists but carries no
+// log-labor stamp: a foreign file, or a hand-edited copy. Installs skip
+// it unless forced, so `skill install` can never silently clobber
+// skill edits (found by the 2026-09-14 skilltest run: a `--help` probe
+// executed a real install and reverted hand-edited skills).
+func ForeignTarget(a Agent) bool {
+	if a.Global == "" {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(a.Global, "SKILL.md")); err != nil {
+		return false // absent → fresh install is fine
+	}
+	return SkillStamp(a.Global) == ""
+}
+
 // UninstallPath — remove our block from a stanza doc, or delete a skill
 // folder/file we own (only if it carries our first line).
 func UninstallPath(path string) (bool, error) {
